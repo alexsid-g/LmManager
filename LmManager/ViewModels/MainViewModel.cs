@@ -295,7 +295,6 @@ public sealed class ServerViewModel(LlmServerProvider provider)
     public LlmServerProvider Provider { get; } = provider;
     public string Name => Provider.Name;
     public string Address => Provider.Address;
-    public string Status { get; private set; } = "Checking...";
     public string? CurrentModel { get; private set; }
     public bool IsRunning { get; private set; }
     public bool IsModelLoaded => !string.IsNullOrWhiteSpace(CurrentModel);
@@ -311,7 +310,6 @@ public sealed class ServerViewModel(LlmServerProvider provider)
     {
         var status = await Provider.GetStatusAsync();
         IsRunning = status.IsRunning;
-        Status = status.IsRunning ? "Running" : "Stopped";
         CurrentModel = status.CurrentModel;
     }
 }

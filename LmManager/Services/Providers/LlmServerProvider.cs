@@ -202,24 +202,20 @@ public abstract class LlmServerProvider : IDisposable
         if (processIds.Length == 0)
             throw new InvalidOperationException($"No process is listening on port {endpoint.Port}.");
 
-        var matchingProcessIds = new List<int>();
+        var matchingProcesses = new List<(int ProcessId, string CommandLine)>();
         foreach (var processId in processIds)
         {
             var commandLine = await RunCommandAsync("ps", "-p", processId.ToString(), "-o", "command=");
             if (IsConfiguredExecutable(commandLine))
-                matchingProcessIds.Add(processId);
+                matchingProcesses.Add((processId, commandLine));
         }
 
-        if (matchingProcessIds.Count == 0)
+        if (matchingProcesses.Count == 0)
             throw new InvalidOperationException(
                 $"A process is listening on port {endpoint.Port}, but it does not match the configured executable '{Executable}'. No process was stopped.");
 
-        foreach (var processId in matchingProcessIds)
+        foreach (var (processId, _) in matchingProcesses)
         {
-            var commandLine = await RunCommandAsync("ps", "-p", processId.ToString(), "-o", "command=");
-            if (!IsConfiguredExecutable(commandLine))
-                throw new InvalidOperationException($"Process {processId} changed before it could be stopped.");
-
             await RunCommandAsync("kill", "-TERM", processId.ToString());
             try
             {
