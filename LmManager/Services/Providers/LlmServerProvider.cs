@@ -42,31 +42,37 @@ public abstract class LlmServerProvider : IDisposable
 
     private async Task<bool> CheckHealthAsync()
     {
-        try
-        {
-            var endpoint = new Uri(new Uri(Address), HealthEndpoint);
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            using var response = await HttpClient.GetAsync(endpoint, timeout.Token);
-            if (!response.IsSuccessStatusCode)
-                return false;
-
-            await using var content = await response.Content.ReadAsStreamAsync();
-            using var json = await JsonDocument.ParseAsync(content);
-            return json.RootElement.TryGetProperty("status", out var status) &&
-                   status.ValueKind == JsonValueKind.String &&
-                   string.Equals(status.GetString(), "ok", StringComparison.OrdinalIgnoreCase);
-        }
-        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or InvalidOperationException or IOException or JsonException or UriFormatException or ArgumentException)
-        {
+        var endpoint = new Uri(new Uri(Address), HealthEndpoint);
+        using var json = await GetJsonAsync(endpoint);
+        if (json is null)
             return false;
-        }
+
+        return json.RootElement.TryGetProperty("status", out var status) &&
+               status.ValueKind == JsonValueKind.String &&
+               string.Equals(status.GetString(), "ok", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<string?> GetLoadedModelIdAsync()
     {
+        var endpoint = new Uri(new Uri(Address), ModelsEndpoint);
+        using var json = await GetJsonAsync(endpoint);
+        return json is null ? null : GetModelId(json.RootElement);
+    }
+
+    private async Task<ServerStatus> GetStatusViaModelsApiAsync()
+    {
+        var endpoint = new Uri(new Uri(Address), ModelsEndpoint);
+        using var json = await GetJsonAsync(endpoint);
+        if (json is null)
+            return new ServerStatus(false);
+
+        return new ServerStatus(true, GetModelId(json.RootElement));
+    }
+
+    private async Task<JsonDocument?> GetJsonAsync(Uri endpoint)
+    {
         try
         {
-            var endpoint = new Uri(new Uri(Address), ModelsEndpoint);
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
             using var response = await HttpClient.GetAsync(
                 endpoint,
@@ -75,26 +81,8 @@ public abstract class LlmServerProvider : IDisposable
             if (!response.IsSuccessStatusCode)
                 return null;
 
-            await using var content = await response.Content.ReadAsStreamAsync();
-            using var json = await JsonDocument.ParseAsync(content);
-            var root = json.RootElement;
-            if (root.ValueKind == JsonValueKind.Object &&
-                root.TryGetProperty("data", out var data) &&
-                data.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var model in data.EnumerateArray())
-                {
-                    if (model.ValueKind == JsonValueKind.Object &&
-                        model.TryGetProperty("id", out var id) &&
-                        id.ValueKind == JsonValueKind.String &&
-                        !string.IsNullOrWhiteSpace(id.GetString()))
-                    {
-                        return id.GetString();
-                    }
-                }
-            }
-
-            return null;
+            await using var content = await response.Content.ReadAsStreamAsync(timeout.Token);
+            return await JsonDocument.ParseAsync(content, cancellationToken: timeout.Token);
         }
         catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or InvalidOperationException or IOException or JsonException or UriFormatException or ArgumentException)
         {
@@ -102,46 +90,29 @@ public abstract class LlmServerProvider : IDisposable
         }
     }
 
-    private async Task<ServerStatus> GetStatusViaModelsApiAsync()
+    private static string? GetModelId(JsonElement root)
     {
-        try
+        if (root.ValueKind != JsonValueKind.Object ||
+            !root.TryGetProperty("data", out var data) ||
+            data.ValueKind != JsonValueKind.Array)
         {
-            var endpoint = new Uri(new Uri(Address), ModelsEndpoint);
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            using var response = await HttpClient.GetAsync(
-                endpoint,
-                HttpCompletionOption.ResponseHeadersRead,
-                timeout.Token);
-            if (!response.IsSuccessStatusCode)
-                return new ServerStatus(false);
+            return null;
+        }
 
-            await using var content = await response.Content.ReadAsStreamAsync(timeout.Token);
-            using var json = await JsonDocument.ParseAsync(content, cancellationToken: timeout.Token);
-            string? modelName = null;
-            var root = json.RootElement;
-            if (root.ValueKind == JsonValueKind.Object &&
-                root.TryGetProperty("data", out var data) &&
-                data.ValueKind == JsonValueKind.Array)
+        foreach (var model in data.EnumerateArray())
+        {
+            if (model.ValueKind != JsonValueKind.Object ||
+                !model.TryGetProperty("id", out var id) ||
+                id.ValueKind != JsonValueKind.String ||
+                string.IsNullOrWhiteSpace(id.GetString()))
             {
-                foreach (var model in data.EnumerateArray())
-                {
-                    if (model.ValueKind == JsonValueKind.Object &&
-                        model.TryGetProperty("id", out var id) &&
-                        id.ValueKind == JsonValueKind.String &&
-                        !string.IsNullOrWhiteSpace(id.GetString()))
-                    {
-                        modelName = id.GetString();
-                        break;
-                    }
-                }
+                continue;
             }
 
-            return new ServerStatus(true, modelName);
+            return id.GetString();
         }
-        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or InvalidOperationException or IOException or JsonException or UriFormatException or ArgumentException)
-        {
-            return new ServerStatus(false);
-        }
+
+        return null;
     }
 
     public async Task StartAsync(ModelInfo model)
