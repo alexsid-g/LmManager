@@ -1,3 +1,4 @@
+using System.Text.Json;
 using LmManager.Models;
 
 namespace LmManager.Services;
@@ -29,25 +30,11 @@ public sealed class ModelScanner
                 continue;
             }
 
-            var ggufFiles = files.Where(file => Path.GetExtension(file).Equals(".gguf", StringComparison.OrdinalIgnoreCase)).ToArray();
-            foreach (var file in ggufFiles)
-            {
-                try
-                {
-                    models.Add(new ModelInfo(Path.GetFileNameWithoutExtension(file), file, ModelFormat.Gguf, GetFileSize(file)));
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    errors.Add($"{file}: {ex.Message}");
-                }
-            }
+            models.AddRange(FindGgufModels(files, errors));
 
-            if (files.Any(file => Path.GetFileName(file).Equals("config.json", StringComparison.OrdinalIgnoreCase)) &&
-                files.Any(file => Path.GetExtension(file).Equals(".safetensors", StringComparison.OrdinalIgnoreCase)))
-            {
-                var name = new DirectoryInfo(directory).Name;
-                models.Add(new ModelInfo(name, directory, ModelFormat.Mlx, GetDirectorySize(directory, errors)));
-            }
+            var mlxModel = FindMlxModel(directory, files, errors);
+            if (mlxModel is not null)
+                models.Add(mlxModel);
 
             foreach (var childDirectory in childDirectories)
             {
@@ -64,6 +51,98 @@ public sealed class ModelScanner
         }
 
         return new ModelScanResult(models.OrderBy(model => model.Name, StringComparer.OrdinalIgnoreCase).ToArray(), errors);
+    }
+
+    private static IEnumerable<ModelInfo> FindGgufModels(string[] files, ICollection<string> errors)
+    {
+        foreach (var file in files.Where(file =>
+                     Path.GetExtension(file).Equals(".gguf", StringComparison.OrdinalIgnoreCase)))
+        {
+            ModelInfo? model = null;
+            try
+            {
+                if (IsGguf(file))
+                {
+                    model = new ModelInfo(
+                        Path.GetFileNameWithoutExtension(file),
+                        file,
+                        ModelFormat.Gguf,
+                        GetFileSize(file));
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                errors.Add($"{file}: {ex.Message}");
+            }
+
+            if (model is not null)
+                yield return model;
+        }
+    }
+
+    private static ModelInfo? FindMlxModel(string directory, string[] files, ICollection<string> errors)
+    {
+        if (!files.Any(file => Path.GetFileName(file)
+            .Equals("config.json", StringComparison.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
+        var hasMlxSafeTensors = false;
+        foreach (var file in files.Where(file => Path.GetExtension(file)
+            .Equals(".safetensors", StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                if (IsMlxSafeTensors(file))
+                {
+                    hasMlxSafeTensors = true;
+                    break;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+            {
+                errors.Add($"{file}: {ex.Message}");
+            }
+        }
+
+        if (!hasMlxSafeTensors)
+            return null;
+
+        var name = new DirectoryInfo(directory).Name;
+        return new ModelInfo(name, directory, ModelFormat.Mlx, GetDirectorySize(directory, errors));
+    }
+
+    private static bool IsGguf(string filePath)
+    {
+        Span<byte> magic = stackalloc byte[4];
+
+        using var stream = File.OpenRead(filePath);
+        return stream.Read(magic) == 4
+            && magic.SequenceEqual("GGUF"u8);
+    }
+
+    private static bool IsMlxSafeTensors(string filePath)
+    {
+        using var stream = File.OpenRead(filePath);
+        if (stream.Length < 8)
+            return false;
+
+        Span<byte> lengthBuffer = stackalloc byte[8];
+        stream.ReadExactly(lengthBuffer);
+
+        var headerLength = (long)BitConverter.ToUInt64(lengthBuffer);
+        if (headerLength > stream.Length - 8 || headerLength > 1024 * 1024)
+            return false;
+
+        var header = new byte[headerLength];
+        stream.ReadExactly(header);
+
+        using var document = JsonDocument.Parse(header);
+        return document.RootElement.TryGetProperty("__metadata__", out var metadata)
+            && metadata.TryGetProperty("format", out var format)
+            && format.ValueKind == JsonValueKind.String
+            && format.GetString() == "mlx";
     }
 
     private static long GetFileSize(string path) => new FileInfo(path).Length;
