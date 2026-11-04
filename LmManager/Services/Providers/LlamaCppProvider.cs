@@ -2,7 +2,7 @@ using LmManager.Models;
 
 namespace LmManager.Services;
 
-public sealed class LlamaCppProvider : LlmServerProvider
+public sealed class LlamaCppProvider : LLMServerProvider
 {
     private readonly AppSettings _settings;
     public LlamaCppProvider(AppSettings settings, Action<string>? logOutput = null)
@@ -17,7 +17,18 @@ public sealed class LlamaCppProvider : LlmServerProvider
     protected override string ExecutableName => "llama-server";
     protected override string ModelsEndpoint => "/v1/models";
     protected override string? HealthEndpoint => "/health";
+    protected override string[] ValidationArguments => ["--version"];
     public override bool Supports(ModelInfo model) => model.Format == ModelFormat.Gguf;
-    protected override string[] BuildArguments(ModelInfo model) =>
-        ["-m", model.Path, "--host", _settings.LlamaHost, "--port", _settings.LlamaPort.ToString()];
+    protected override string[] BuildArguments(ModelInfo model)
+    {
+        var arguments = new List<string> { "-m", model.Path };
+        if (model.HasMmproj && model.MmprojFileName is { } mmprojFileName)
+        {
+            var modelDirectory = Path.GetDirectoryName(model.Path) ?? ".";
+            arguments.AddRange(["--mmproj", Path.Combine(modelDirectory, mmprojFileName)]);
+        }
+
+        arguments.AddRange(["--host", _settings.LlamaHost, "--port", _settings.LlamaPort.ToString()]);
+        return arguments.ToArray();
+    }
 }

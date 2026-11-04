@@ -13,7 +13,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private readonly ModelScanner _modelScanner = new();
     private readonly AppLogger _logger;
     private readonly AppSettings _settings;
-    private readonly List<LlmServerProvider> _providers = [];
+    private readonly List<LLMServerProvider> _providers = [];
     private volatile bool _refreshing;
     private volatile bool _refreshPending;
     private volatile bool _scanning;
@@ -43,9 +43,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         });
         _logger.Write($"Application started. Settings file: {_settingsStore.SettingsPath}");
 
-        _providers.Add(new MlxLmProvider(_settings, message => _logger.Write(message)));
-        _providers.Add(new MlxVlmProvider(_settings, message => _logger.Write(message)));
         _providers.Add(new LlamaCppProvider(_settings, message => _logger.Write(message)));
+        _providers.Add(new MlxLmProvider(_settings, message => _logger.Write(message)));
         foreach (var provider in _providers)
             Servers.Add(new ServerViewModel(provider));
     }
@@ -290,9 +289,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public bool HasLoadedModel => Servers.Any(server => server.IsModelLoaded);
 }
 
-public sealed class ServerViewModel(LlmServerProvider provider)
+public sealed class ServerViewModel(LLMServerProvider provider)
 {
-    public LlmServerProvider Provider { get; } = provider;
+    public LLMServerProvider Provider { get; } = provider;
     public string Name => Provider.Name;
     public string Address => Provider.Address;
     public string? CurrentModel { get; private set; }

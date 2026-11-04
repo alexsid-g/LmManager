@@ -2,7 +2,7 @@ using LmManager.Models;
 
 namespace LmManager.Services;
 
-public class MlxLmProvider : LlmServerProvider
+public class MlxLmProvider : LLMServerProvider
 {
     protected readonly AppSettings Settings;
 

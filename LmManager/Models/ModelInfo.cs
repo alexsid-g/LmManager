@@ -6,9 +6,16 @@ public enum ModelFormat
     Gguf
 }
 
-public sealed record ModelInfo(string Name, string Path, ModelFormat Format, long SizeBytes)
+public sealed record ModelInfo(
+    string Name,
+    string Path,
+    ModelFormat Format,
+    long SizeBytes,
+    string? MmprojFileName = null)
 {
-    public string DisplayName => $"{Name} ({Format}, {FormatSize(SizeBytes)})";
+    public bool HasMmproj => !string.IsNullOrWhiteSpace(MmprojFileName);
+    public string DisplayName => 
+        $"{Name}{(HasMmproj ? " (+mmproj)" : string.Empty)} ({Format}, {FormatSize(SizeBytes)})";
 
     private static string FormatSize(long sizeBytes) =>
         sizeBytes >= 1024L * 1024 * 1024

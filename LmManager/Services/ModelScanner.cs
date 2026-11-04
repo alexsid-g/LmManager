@@ -55,20 +55,38 @@ public sealed class ModelScanner
 
     private static IEnumerable<ModelInfo> FindGgufModels(string[] files, ICollection<string> errors)
     {
+        var validGgufFiles = new List<string>();
         foreach (var file in files.Where(file =>
                      Path.GetExtension(file).Equals(".gguf", StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                if (IsGguf(file))
+                    validGgufFiles.Add(file);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                errors.Add($"{file}: {ex.Message}");
+            }
+        }
+
+        var mmprojFileName = validGgufFiles
+            .Where(IsMmprojFile)
+            .Select(Path.GetFileName)
+            .OrderBy(fileName => fileName, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+
+        foreach (var file in validGgufFiles.Where(file => !IsMmprojFile(file)))
         {
             ModelInfo? model = null;
             try
             {
-                if (IsGguf(file))
-                {
-                    model = new ModelInfo(
-                        Path.GetFileNameWithoutExtension(file),
-                        file,
-                        ModelFormat.Gguf,
-                        GetFileSize(file));
-                }
+                model = new ModelInfo(
+                    Path.GetFileNameWithoutExtension(file),
+                    file,
+                    ModelFormat.Gguf,
+                    GetFileSize(file),
+                    mmprojFileName);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -79,6 +97,9 @@ public sealed class ModelScanner
                 yield return model;
         }
     }
+
+    private static bool IsMmprojFile(string filePath) =>
+        Path.GetFileName(filePath).StartsWith("mmproj-", StringComparison.OrdinalIgnoreCase);
 
     private static ModelInfo? FindMlxModel(string directory, string[] files, ICollection<string> errors)
     {

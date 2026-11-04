@@ -5,13 +5,13 @@ using LmManager.Models;
 
 namespace LmManager.Services;
 
-public abstract class LlmServerProvider : IDisposable
+public abstract class LLMServerProvider : IDisposable
 {
     private static readonly HttpClient HttpClient = new();
     private readonly Action<string>? _logOutput;
     private Process? _managedProcess;
 
-    protected LlmServerProvider(Action<string>? logOutput = null)
+    protected LLMServerProvider(Action<string>? logOutput = null)
     {
         _logOutput = logOutput;
     }
@@ -21,6 +21,7 @@ public abstract class LlmServerProvider : IDisposable
     protected abstract string Executable { get; }
     protected abstract string ExecutableName { get; }
     protected abstract string ModelsEndpoint { get; }
+    protected virtual string[] ValidationArguments => ["--help"];
     /// <summary>
     /// Optional liveness endpoint. When non-null the server is considered running
     /// only when the response body has "status": "ok". When null, liveness is derived
@@ -126,15 +127,17 @@ public abstract class LlmServerProvider : IDisposable
         if (!Supports(model))
             throw new InvalidOperationException($"{Name} does not support the {model.Format} format.");
 
+        var resolvedExecutable = ExecutableResolver.Find(Executable, ExecutableName)
+            ?? throw new InvalidOperationException(
+                $"Could not find an executable file for '{Executable}'. Check that it exists, is executable, and is available in PATH.");
+        await ValidateExecutableAsync(resolvedExecutable);
+
         if (_managedProcess is { HasExited: false })
         {
             await StopAsync();
             await _managedProcess!.WaitForExitAsync();
         }
 
-        var resolvedExecutable = ExecutableResolver.Find(Executable, ExecutableName)
-            ?? throw new InvalidOperationException(
-                $"Could not find an executable file for '{Executable}'. Check the configured path, PATH, and execute permissions.");
         var startInfo = new ProcessStartInfo
         {
             FileName = resolvedExecutable,
@@ -159,6 +162,61 @@ public abstract class LlmServerProvider : IDisposable
         }
 
         _ = ReadProcessStreamsAsync(_managedProcess);
+    }
+
+    private async Task ValidateExecutableAsync(string executablePath)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = executablePath,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        foreach (var argument in ValidationArguments)
+            startInfo.ArgumentList.Add(argument);
+
+        using var process = new Process { StartInfo = startInfo };
+        try
+        {
+            if (!process.Start())
+                throw new InvalidOperationException($"Starting '{executablePath}' returned no process.");
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or UnauthorizedAccessException)
+        {
+            throw new InvalidOperationException(
+                $"Found executable '{executablePath}', but could not run it. Check its permissions, format, and required runtime.",
+                ex);
+        }
+
+        var standardOutputTask = process.StandardOutput.ReadToEndAsync();
+        var standardErrorTask = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException ex)
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync();
+            await Task.WhenAll(standardOutputTask, standardErrorTask);
+            throw new IOException(
+                $"Executable '{executablePath}' did not finish its '{string.Join(' ', ValidationArguments)}' check within 15 seconds.",
+                ex);
+        }
+
+        var standardOutput = await standardOutputTask;
+        var standardError = await standardErrorTask;
+        if (process.ExitCode != 0)
+        {
+            var details = string.IsNullOrWhiteSpace(standardError) ? standardOutput : standardError;
+            throw new InvalidOperationException(
+                $"Executable '{executablePath}' failed its '{string.Join(' ', ValidationArguments)}' check with exit code {process.ExitCode}." +
+                (string.IsNullOrWhiteSpace(details) ? string.Empty : $" {details.Trim()}"));
+        }
     }
 
     private async Task ReadProcessStreamsAsync(Process process)
