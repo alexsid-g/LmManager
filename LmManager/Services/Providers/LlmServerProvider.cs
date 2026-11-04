@@ -1,0 +1,334 @@
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Text.Json;
+using LmManager.Models;
+
+namespace LmManager.Services;
+
+public abstract class LlmServerProvider : IDisposable
+{
+    private static readonly HttpClient HttpClient = new();
+    private Process? _managedProcess;
+
+    public abstract string Name { get; }
+    public abstract string Address { get; }
+    protected abstract string Executable { get; }
+    protected abstract string ExecutableName { get; }
+    protected abstract string ModelsEndpoint { get; }
+    /// <summary>
+    /// Optional liveness endpoint. When non-null the server is considered running
+    /// only when the response body has "status": "ok". When null, liveness is derived
+    /// from the models endpoint.
+    /// </summary>
+    protected abstract string? HealthEndpoint { get; }
+
+    public bool IsManagedProcessRunning => _managedProcess is { HasExited: false };
+    public abstract bool Supports(ModelInfo model);
+    protected abstract string[] BuildArguments(ModelInfo model);
+
+    public async Task<ServerStatus> GetStatusAsync()
+    {
+        // llama.cpp exposes a dedicated /health endpoint: treat "status": "ok" as running.
+        if (!string.IsNullOrWhiteSpace(HealthEndpoint))
+        {
+            if (!await CheckHealthAsync())
+                return new ServerStatus(false);
+            return new ServerStatus(true, await GetLoadedModelIdAsync());
+        }
+
+        // MLX-LM has no dedicated health endpoint: liveness comes from /v1/models.
+        return await GetStatusViaModelsApiAsync();
+    }
+
+    private async Task<bool> CheckHealthAsync()
+    {
+        try
+        {
+            var endpoint = new Uri(new Uri(Address), HealthEndpoint);
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            using var response = await HttpClient.GetAsync(endpoint, timeout.Token);
+            if (!response.IsSuccessStatusCode)
+                return false;
+
+            await using var content = await response.Content.ReadAsStreamAsync();
+            using var json = await JsonDocument.ParseAsync(content);
+            return json.RootElement.TryGetProperty("status", out var status) &&
+                   status.ValueKind == JsonValueKind.String &&
+                   string.Equals(status.GetString(), "ok", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or InvalidOperationException or IOException or JsonException or UriFormatException or ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    private async Task<string?> GetLoadedModelIdAsync()
+    {
+        try
+        {
+            var endpoint = new Uri(new Uri(Address), ModelsEndpoint);
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            using var response = await HttpClient.GetAsync(
+                endpoint,
+                HttpCompletionOption.ResponseHeadersRead,
+                timeout.Token);
+            if (!response.IsSuccessStatusCode)
+                return null;
+
+            await using var content = await response.Content.ReadAsStreamAsync();
+            using var json = await JsonDocument.ParseAsync(content);
+            var root = json.RootElement;
+            if (root.ValueKind == JsonValueKind.Object &&
+                root.TryGetProperty("data", out var data) &&
+                data.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var model in data.EnumerateArray())
+                {
+                    if (model.ValueKind == JsonValueKind.Object &&
+                        model.TryGetProperty("id", out var id) &&
+                        id.ValueKind == JsonValueKind.String &&
+                        !string.IsNullOrWhiteSpace(id.GetString()))
+                    {
+                        return id.GetString();
+                    }
+                }
+            }
+
+            return null;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or InvalidOperationException or IOException or JsonException or UriFormatException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    private async Task<ServerStatus> GetStatusViaModelsApiAsync()
+    {
+        try
+        {
+            var endpoint = new Uri(new Uri(Address), ModelsEndpoint);
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            using var response = await HttpClient.GetAsync(
+                endpoint,
+                HttpCompletionOption.ResponseHeadersRead,
+                timeout.Token);
+            if (!response.IsSuccessStatusCode)
+                return new ServerStatus(false);
+
+            await using var content = await response.Content.ReadAsStreamAsync(timeout.Token);
+            using var json = await JsonDocument.ParseAsync(content, cancellationToken: timeout.Token);
+            string? modelName = null;
+            var root = json.RootElement;
+            if (root.ValueKind == JsonValueKind.Object &&
+                root.TryGetProperty("data", out var data) &&
+                data.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var model in data.EnumerateArray())
+                {
+                    if (model.ValueKind == JsonValueKind.Object &&
+                        model.TryGetProperty("id", out var id) &&
+                        id.ValueKind == JsonValueKind.String &&
+                        !string.IsNullOrWhiteSpace(id.GetString()))
+                    {
+                        modelName = id.GetString();
+                        break;
+                    }
+                }
+            }
+
+            return new ServerStatus(true, modelName);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or InvalidOperationException or IOException or JsonException or UriFormatException or ArgumentException)
+        {
+            return new ServerStatus(false);
+        }
+    }
+
+    public async Task StartAsync(ModelInfo model)
+    {
+        if (!Supports(model))
+            throw new InvalidOperationException($"{Name} does not support the {model.Format} format.");
+
+        if (_managedProcess is { HasExited: false })
+        {
+            await StopAsync();
+            await _managedProcess!.WaitForExitAsync();
+        }
+
+        var resolvedExecutable = ExecutableResolver.Find(Executable, ExecutableName)
+            ?? throw new InvalidOperationException(
+                $"Could not find an executable file for '{Executable}'. Check the configured path, PATH, and execute permissions.");
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = resolvedExecutable,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        foreach (var argument in BuildArguments(model))
+            startInfo.ArgumentList.Add(argument);
+
+        try
+        {
+            _managedProcess = Process.Start(startInfo)
+                ?? throw new InvalidOperationException($"Starting '{resolvedExecutable}' returned no process.");
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or UnauthorizedAccessException)
+        {
+            throw new InvalidOperationException(
+                $"Found executable '{resolvedExecutable}', but could not start it. Check its format, permissions, and required runtime.",
+                ex);
+        }
+
+        _ = ReadProcessStreamsAsync(_managedProcess);
+    }
+
+    private static async Task ReadProcessStreamsAsync(Process process)
+    {
+        try
+        {
+            await process.StandardOutput.ReadToEndAsync();
+            await process.StandardError.ReadToEndAsync();
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException or OperationCanceledException)
+        {
+            // The pipes close when the process exits, so these are expected and safe to ignore.
+        }
+    }
+
+    public async Task StopAsync()
+    {
+        if (_managedProcess is { HasExited: false } process)
+        {
+            process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync();
+            return;
+        }
+
+        await StopExternalProcessAsync();
+    }
+
+    private async Task StopExternalProcessAsync()
+    {
+        if (!OperatingSystem.IsMacOS())
+            throw new PlatformNotSupportedException("Stopping an externally started server is currently supported on macOS only.");
+
+        var endpoint = new Uri(Address);
+        var listenerOutput = await RunCommandAsync(
+            "lsof",
+            "-nP",
+            $"-iTCP:{endpoint.Port}",
+            "-sTCP:LISTEN",
+            "-t");
+        var processIds = listenerOutput
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => int.TryParse(line, out var processId) ? processId : 0)
+            .Where(processId => processId > 0)
+            .Distinct()
+            .ToArray();
+
+        if (processIds.Length == 0)
+            throw new InvalidOperationException($"No process is listening on port {endpoint.Port}.");
+
+        var matchingProcessIds = new List<int>();
+        foreach (var processId in processIds)
+        {
+            var commandLine = await RunCommandAsync("ps", "-p", processId.ToString(), "-o", "command=");
+            if (IsConfiguredExecutable(commandLine))
+                matchingProcessIds.Add(processId);
+        }
+
+        if (matchingProcessIds.Count == 0)
+            throw new InvalidOperationException(
+                $"A process is listening on port {endpoint.Port}, but it does not match the configured executable '{Executable}'. No process was stopped.");
+
+        foreach (var processId in matchingProcessIds)
+        {
+            var commandLine = await RunCommandAsync("ps", "-p", processId.ToString(), "-o", "command=");
+            if (!IsConfiguredExecutable(commandLine))
+                throw new InvalidOperationException($"Process {processId} changed before it could be stopped.");
+
+            await RunCommandAsync("kill", "-TERM", processId.ToString());
+            try
+            {
+                using var process = Process.GetProcessById(processId);
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                await process.WaitForExitAsync(timeout.Token);
+            }
+            catch (ArgumentException)
+            {
+                // The process exited before it could be opened or while waiting.
+            }
+            catch (OperationCanceledException ex)
+            {
+                throw new IOException($"Server process {processId} did not stop after receiving SIGTERM.", ex);
+            }
+        }
+    }
+
+    private bool IsConfiguredExecutable(string commandLine)
+    {
+        var executableName = Path.GetFileName(Executable);
+        return commandLine
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+            .Select(token => token.Trim('"', '\''))
+            .Any(token =>
+                string.Equals(token, Executable, StringComparison.Ordinal) ||
+                string.Equals(Path.GetFileName(token), executableName, StringComparison.Ordinal));
+    }
+
+    private static async Task<string> RunCommandAsync(string executable, params string[] arguments)
+    {
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = executable,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            }
+        };
+        foreach (var argument in arguments)
+            process.StartInfo.ArgumentList.Add(argument);
+
+        if (!process.Start())
+            throw new IOException($"Could not start '{executable}'.");
+
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException ex)
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync();
+            await Task.WhenAll(outputTask, errorTask);
+            throw new IOException($"Command '{executable}' timed out.", ex);
+        }
+
+        await Task.WhenAll(outputTask, errorTask);
+        if (process.ExitCode != 0)
+        {
+            var error = await errorTask;
+            throw new IOException(string.IsNullOrWhiteSpace(error)
+                ? $"Command '{executable}' exited with code {process.ExitCode}."
+                : error.Trim());
+        }
+
+        return await outputTask;
+    }
+
+    public virtual void Dispose()
+    {
+        if (_managedProcess is { HasExited: false })
+            _managedProcess.Kill(entireProcessTree: true);
+        _managedProcess?.Dispose();
+    }
+}

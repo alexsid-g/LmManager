@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch published macOS app",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "Publish macOS app",
+      "program": "${workspaceFolder}/artifacts/macos/LMManager.app/Contents/MacOS/LmManager",
+      "cwd": "${workspaceFolder}/artifacts/macos/LMManager.app/Contents/MacOS",
+      "console": "internalConsole",
+      "stopAtEntry": false
+    },
+    {
+      "name": "Published macOS app",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "Publish macOS app",
+      "program": "${workspaceFolder}/artifacts/macos/LMManager.app/Contents/MacOS/LmManager",
+      "cwd": "",
+      "console": "internalConsole",
+      "stopAtEntry": false
+    }
+  ]
+}

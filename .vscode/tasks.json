@@ -1,0 +1,38 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Publish macOS app",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/scripts/publish-macos.sh"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Sign macOS app",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/scripts/sign-macos.sh"
+      ],
+      "dependsOn": "Publish macOS app",
+      "dependsOrder": "sequence",
+      "options": {
+        "env": {
+          "SIGNING_IDENTITY": "${input:signingIdentity}"
+        }
+      },
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "signingIdentity",
+      "type": "promptString",
+      "description": "Installed Developer ID Application identity (from Keychain Access)",
+      "password": false
+    }
+  ]
+}

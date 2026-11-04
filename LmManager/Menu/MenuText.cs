@@ -1,0 +1,29 @@
+namespace LmManager.Menu;
+
+/// <summary>
+/// Single source of truth for the tray-menu text. Every visible menu item
+/// label is a constant here so the menu wording is defined once and reused.
+/// Dynamic lines (status, paths, model names) are composed from these constants.
+/// </summary>
+public static class MenuText
+{
+    public const string TitlePrefix = "Local LLM Manager";
+    public const string StatusSeparator = " - ";
+
+    public const string ModelsFolderPrefix = "Models folder";
+    public const string ChooseFolder = "Choose folder...";
+    public const string ScanNow = "Scan now";
+    public const string LoadModel = "Load model";
+    public const string NoModels = "Empty";
+
+    public const string ModelLabel = "Model";
+    public const string Running = "Running";
+    public const string Stopped = "Stopped";
+
+    public const string StopServer = "Stop server";
+    public const string StopExternalServer = "Stop external server";
+    public const string StopExternalServerOnly = "Stop external server (macOS only)";
+
+    public const string ShowLog = "Show Log";
+    public const string Quit = "Quit";
+}
