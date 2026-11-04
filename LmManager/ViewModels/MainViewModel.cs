@@ -7,17 +7,17 @@ using LmManager.Services;
 
 namespace LmManager.ViewModels;
 
-public partial class MainViewModel : ViewModelBase, IDisposable
+public partial class MainViewModel : ObservableObject, IDisposable
 {
     private readonly SettingsStore _settingsStore = new();
     private readonly ModelScanner _modelScanner = new();
     private readonly AppLogger _logger;
     private readonly AppSettings _settings;
     private readonly List<LlmServerProvider> _providers = [];
-    private bool _refreshing;
-    private bool _refreshPending;
-    private bool _scanning;
-    private bool _initialized;
+    private volatile bool _refreshing;
+    private volatile bool _refreshPending;
+    private volatile bool _scanning;
+    private volatile bool _initialized;
 
     [ObservableProperty]
     private string _modelsDirectory;

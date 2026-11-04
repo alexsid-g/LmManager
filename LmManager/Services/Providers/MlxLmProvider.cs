@@ -2,22 +2,29 @@ using LmManager.Models;
 
 namespace LmManager.Services;
 
-public sealed class MlxLmProvider : LlmServerProvider
+public class MlxLmProvider : LlmServerProvider
 {
-    private readonly AppSettings _settings;
+    protected readonly AppSettings Settings;
+
     public MlxLmProvider(AppSettings settings, Action<string>? logOutput = null)
         : base(logOutput)
     {
-        _settings = settings;
+        Settings = settings;
     }
 
-    public override string Name => "MLX-LM";
-    public override string Address => $"http://{_settings.MlxHost}:{_settings.MlxPort}";
-    protected override string Executable => _settings.MlxExecutable;
-    protected override string ExecutableName => "mlx_lm.server";
+    protected virtual string ProviderName => "MLX-LM";
+    protected virtual string Host => Settings.MlxHost;
+    protected virtual int Port => Settings.MlxPort;
+    protected virtual string ServerExecutable => Settings.MlxExecutable;
+    protected virtual string ServerExecutableName => "mlx_lm.server";
+
+    public override string Name => ProviderName;
+    public override string Address => $"http://{Host}:{Port}";
+    protected override string Executable => ServerExecutable;
+    protected override string ExecutableName => ServerExecutableName;
     protected override string ModelsEndpoint => "/v1/models";
     protected override string? HealthEndpoint => null;
     public override bool Supports(ModelInfo model) => model.Format == ModelFormat.Mlx;
     protected override string[] BuildArguments(ModelInfo model) =>
-        ["--model", model.Path, "--host", _settings.MlxHost, "--port", _settings.MlxPort.ToString()];
+        ["--model", model.Path, "--host", Host, "--port", Port.ToString()];
 }

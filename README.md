@@ -41,7 +41,7 @@ Local LLM Manager
 - .NET 10 — основной runtime.
 - Avalonia UI — desktop UI с поддержкой macOS.
 - CommunityToolkit.Mvvm — MVVM.
-- Microsoft.Extensions.Hosting — DI, конфигурация и фоновые сервисы.
+- [TO-BE-IMPLEMENTED] Microsoft.Extensions.Hosting — DI, конфигурация и фоновые сервисы.
 - System.Text.Json — работа с API.
 - Serilog — логи (с ротацией, не больше 5 файлов по 1 MB размером)
 
@@ -49,11 +49,11 @@ Avalonia поддерживает macOS, включая меню в систем
 
 [image](https://www.google.com/s2/favicons?domain=https://docs.avaloniaui.net\&sz=32)
 
-Структура проекта:
+[TO-BE-IMPLEMENTED] Целевая структура проекта:
 
 ```
-LocalLlmManager/
-│   ├── LocalLlmManager.App/
+LmManager/
+│   ├── LmManager/
 │   │   ├── Views/
 │   │   ├── ViewModels/
 │   │   └── App.axaml
@@ -63,7 +63,7 @@ LocalLlmManager/
 │   │   ├── Interfaces/
 │   │   └── Services/
 │   │
-│   ├── LocalLlmManager.Infrastructure/
+│   ├── LmManager.Infrastructure/
 │   │   ├── Servers/
 │   │   │   ├── MlxLmProvider.cs
 │   │   │   └── LlamaCppProvider.cs
@@ -73,7 +73,7 @@ LocalLlmManager/
 │   └── LocalLlmManager.Tests/
 ```
 
-## 3. Общий интерфейс серверов
+## 3. Общий интерфейс серверов [TO-BE-IMPLEMENTED]
 
 Это центральная часть архитектуры. UI не должен знать, как именно запускается MLX-LM или llama.cpp.
 
@@ -219,6 +219,8 @@ public enum ModelFormat
 ## Реализованный MVP
 
 Приложение запускается в системном трее. В меню доступны выбор и повторное сканирование папки, состояние серверов, запуск совместимой модели, остановка процесса, запущенного приложением, и выход. MLX-модель определяется по `config.json` и `.safetensors` в одной папке; GGUF — по файлам `.gguf`.
+
+Набор серверов фиксирован: MLX-LM, MLX-VLM и llama.cpp создаются при запуске приложения и не добавляются или удаляются динамически. Меню сервера строится для этого набора.
 
 При старте приложение сканирует сохранённую папку моделей и обновляет состояние серверов. Статус сервисов обновляется при клике по значку в трее (на платформах, где Avalonia поддерживает это событие) и при открытии меню; периодического обновления по таймеру нет. Выбранная папка моделей сохраняется атомарно между запусками в `settings.json` в каталоге `LmManager` внутри `Environment.SpecialFolder.ApplicationData`; точный путь к файлу настроек указывается в логе приложения. Там хранятся также папка логов, адреса и порты серверов и команды запуска. Логи пишет Serilog в `lm-manager.log` с прокруткой при достижении 1 MB и хранением не более пяти файлов. Для каждого сервера приложение проверяет настроенный executable, затем ищет его имя в `PATH`; на macOS также проверяются стандартные каталоги Homebrew (`/opt/homebrew/bin` и `/usr/local/bin`), поскольку приложения, запущенные из Finder, могут не получить shell `PATH`. На Unix проверяются права на выполнение, а при запуске сообщается об ошибках формата файла, разрешений или runtime. Если команда не найдена, укажите абсолютный путь в `~/Library/Application Support/LmManager/settings.json`. Формат аргументов запуска:
 

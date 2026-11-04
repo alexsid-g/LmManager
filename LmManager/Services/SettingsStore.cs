@@ -18,37 +18,34 @@ public sealed class SettingsStore
 
         try
         {
-            var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath)) ?? new AppSettings();
+            var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath));
             var defaults = new AppSettings();
-            if (string.IsNullOrWhiteSpace(settings.ModelsDirectory))
-                settings.ModelsDirectory = defaults.ModelsDirectory;
-            if (string.IsNullOrWhiteSpace(settings.LogsDirectory))
-                settings.LogsDirectory = defaults.LogsDirectory;
-            if (string.IsNullOrWhiteSpace(settings.MlxHost))
-                settings.MlxHost = defaults.MlxHost;
-            if (settings.MlxPort is < 1 or > 65535)
-                settings.MlxPort = defaults.MlxPort;
-            if (string.IsNullOrWhiteSpace(settings.MlxExecutable))
-                settings.MlxExecutable = defaults.MlxExecutable;
-            if (string.IsNullOrWhiteSpace(settings.MlxVlmHost))
-                settings.MlxVlmHost = defaults.MlxVlmHost;
-            if (settings.MlxVlmPort is < 1 or > 65535)
-                settings.MlxVlmPort = defaults.MlxVlmPort;
-            if (string.IsNullOrWhiteSpace(settings.MlxVlmExecutable))
-                settings.MlxVlmExecutable = defaults.MlxVlmExecutable;
-            if (string.IsNullOrWhiteSpace(settings.LlamaHost))
-                settings.LlamaHost = defaults.LlamaHost;
-            if (settings.LlamaPort is < 1 or > 65535)
-                settings.LlamaPort = defaults.LlamaPort;
-            if (string.IsNullOrWhiteSpace(settings.LlamaExecutable))
-                settings.LlamaExecutable = defaults.LlamaExecutable;
-            return settings;
+            return new AppSettings
+            {
+                ModelsDirectory = GetValueOrDefault(settings?.ModelsDirectory, defaults.ModelsDirectory),
+                LogsDirectory = GetValueOrDefault(settings?.LogsDirectory, defaults.LogsDirectory),
+                MlxHost = GetValueOrDefault(settings?.MlxHost, defaults.MlxHost),
+                MlxPort = GetPortOrDefault(settings?.MlxPort, defaults.MlxPort),
+                MlxExecutable = GetValueOrDefault(settings?.MlxExecutable, defaults.MlxExecutable),
+                MlxVlmHost = GetValueOrDefault(settings?.MlxVlmHost, defaults.MlxVlmHost),
+                MlxVlmPort = GetPortOrDefault(settings?.MlxVlmPort, defaults.MlxVlmPort),
+                MlxVlmExecutable = GetValueOrDefault(settings?.MlxVlmExecutable, defaults.MlxVlmExecutable),
+                LlamaHost = GetValueOrDefault(settings?.LlamaHost, defaults.LlamaHost),
+                LlamaPort = GetPortOrDefault(settings?.LlamaPort, defaults.LlamaPort),
+                LlamaExecutable = GetValueOrDefault(settings?.LlamaExecutable, defaults.LlamaExecutable)
+            };
         }
         catch (JsonException)
         {
             return new AppSettings();
         }
     }
+
+    private static string GetValueOrDefault(string? value, string defaultValue) =>
+        string.IsNullOrWhiteSpace(value) ? defaultValue : value;
+
+    private static int GetPortOrDefault(int? port, int defaultValue) =>
+        port is >= 1 and <= 65535 ? port.Value : defaultValue;
 
     public void Save(AppSettings settings)
     {
