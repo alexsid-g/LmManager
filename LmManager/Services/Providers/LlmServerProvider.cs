@@ -149,6 +149,9 @@ public abstract class LLMServerProvider : IDisposable
         foreach (var argument in BuildArguments(model))
             startInfo.ArgumentList.Add(argument);
 
+        _logOutput?.Invoke(
+            $"[{Name}] Starting model process: executable={JsonSerializer.Serialize(resolvedExecutable)}, arguments={JsonSerializer.Serialize(startInfo.ArgumentList)}");
+
         try
         {
             _managedProcess = Process.Start(startInfo)
