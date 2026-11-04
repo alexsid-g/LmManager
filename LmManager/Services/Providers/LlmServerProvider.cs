@@ -8,7 +8,13 @@ namespace LmManager.Services;
 public abstract class LlmServerProvider : IDisposable
 {
     private static readonly HttpClient HttpClient = new();
+    private readonly Action<string>? _logOutput;
     private Process? _managedProcess;
+
+    protected LlmServerProvider(Action<string>? logOutput = null)
+    {
+        _logOutput = logOutput;
+    }
 
     public abstract string Name { get; }
     public abstract string Address { get; }
@@ -155,16 +161,28 @@ public abstract class LlmServerProvider : IDisposable
         _ = ReadProcessStreamsAsync(_managedProcess);
     }
 
-    private static async Task ReadProcessStreamsAsync(Process process)
+    private async Task ReadProcessStreamsAsync(Process process)
     {
         try
         {
-            await process.StandardOutput.ReadToEndAsync();
-            await process.StandardError.ReadToEndAsync();
+            process.OutputDataReceived += (_, args) =>
+            {
+                if (!string.IsNullOrWhiteSpace(args.Data))
+                    _logOutput?.Invoke($"[{Name}] stdout: {args.Data}");
+            };
+            process.ErrorDataReceived += (_, args) =>
+            {
+                if (!string.IsNullOrWhiteSpace(args.Data))
+                    _logOutput?.Invoke($"[{Name}] stderr: {args.Data}");
+            };
+
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+            await process.WaitForExitAsync();
         }
-        catch (Exception ex) when (ex is IOException or ObjectDisposedException or OperationCanceledException)
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or ObjectDisposedException or OperationCanceledException or NotSupportedException)
         {
-            // The pipes close when the process exits, so these are expected and safe to ignore.
+            _logOutput?.Invoke($"[{Name}] Could not read the server process output: {ex.Message}");
         }
     }
 

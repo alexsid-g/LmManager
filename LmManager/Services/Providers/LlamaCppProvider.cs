@@ -5,7 +5,11 @@ namespace LmManager.Services;
 public sealed class LlamaCppProvider : LlmServerProvider
 {
     private readonly AppSettings _settings;
-    public LlamaCppProvider(AppSettings settings) => _settings = settings;
+    public LlamaCppProvider(AppSettings settings, Action<string>? logOutput = null)
+        : base(logOutput)
+    {
+        _settings = settings;
+    }
 
     public override string Name => "llama.cpp";
     public override string Address => $"http://{_settings.LlamaHost}:{_settings.LlamaPort}";

@@ -5,7 +5,11 @@ namespace LmManager.Services;
 public sealed class MlxVlmProvider : LlmServerProvider
 {
     private readonly AppSettings _settings;
-    public MlxVlmProvider(AppSettings settings) => _settings = settings;
+    public MlxVlmProvider(AppSettings settings, Action<string>? logOutput = null)
+        : base(logOutput)
+    {
+        _settings = settings;
+    }
 
     public override string Name => "MLX-LMV";
     public override string Address => $"http://{_settings.MlxVlmHost}:{_settings.MlxVlmPort}";

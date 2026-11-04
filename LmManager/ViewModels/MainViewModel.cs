@@ -43,9 +43,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         });
         _logger.Write($"Application started. Settings file: {_settingsStore.SettingsPath}");
 
-        _providers.Add(new MlxLmProvider(_settings));
-        _providers.Add(new MlxVlmProvider(_settings));
-        _providers.Add(new LlamaCppProvider(_settings));
+        _providers.Add(new MlxLmProvider(_settings, message => _logger.Write(message)));
+        _providers.Add(new MlxVlmProvider(_settings, message => _logger.Write(message)));
+        _providers.Add(new LlamaCppProvider(_settings, message => _logger.Write(message)));
         foreach (var provider in _providers)
             Servers.Add(new ServerViewModel(provider));
     }
