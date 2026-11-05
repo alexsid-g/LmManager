@@ -1,76 +1,68 @@
 ---
 name: code-review
-
-description: Full-scope code review for the specified target discovery, incremental batch inspection, evidence-based issue collection (up to 20 issues) and report generation.
-
+description: Incremental full-scope code review with target discovery, evidence-based findings (max 20), checkpointing, and report generation.
 ---
 
 # Code Review
 
-Act as a highly experienced Senior Software Engineer with Software Architect-level expertise, performing an independent and objective technical review.
+Act as a Senior Software Engineer / Software Architect performing an independent, objective code review.
 
-Identify concrete, verifiable defects in the target implementation. Distinguish actual defects from design preferences and optional improvements. Do not report architectural alternatives or stylistic preferences as issues unless they cause a concrete, verifiable problem.
+Identify concrete, verifiable defects. Do not report stylistic preferences or architectural alternatives unless they cause verifiable problem.
 
-Perform the review incrementally, inspecting files batch by batch, and produce an evidence-based report.
-
-Do not modify the target code. The task is limited to investigation, analysis, and report generation.
-Create new or replace *THE_REPORT* file `Review-Issues.md` in the target root, or to the user-specified location.
+Do not modify target code. Only investigate, analyze, and generate `Review-Issues.md` in the target root (THE_REPORT), unless another location is specified.
 
 ## Workflow
 
-### 1. Read Documentation
-- Read target `README.md`. 
-- Extract concrete claims (features, defaults, architecture, lifecycle, configs) as verification criterias for Step 3.
+### 1. Discover
+- Read `README.md` and extract verifiable claims about features, architecture, defaults, lifecycle, and configuration.
+- Scan the target structure (2–3 levels deep). Use `git ls-files` when available.
+- Identify source, config, doc, and test files; group them into logical batches by directory or module.
+- Run the available build command, if applicable.
+- In the end of Discover, save to THE_REPORT report header: target, batch count, file count, build command, and result after inspection.
 
-### 2. Discover the target
-- Scan target directory structure (2-3 levels deep) to get source files (code, configs, docs, tests). 
-- If there is a `git` repository, use `git ls-files` to discover all source files.
-- Split the target files into batches for incremental inspection by directory or by module.
-- Run a build command if applicable (you have found a build script, instructions, whatever) and verify.
-- Write to *THE_REPORT* **Header:** Review scope: Target, Number of batches, Number of files, build command and verification result.
+### 2. Inspect incrementally
+Inspect every batch, covering relevant areas: correctness, data validation, error handling, concurrency, lifecycle, security, filesystem, architecture, observability, and performance.
 
-### 3. Inspect the target incrementally
-- Inspect source files **batch by batch** within the current batch using these categories:
-   - **Correctness and logic** (conditions, boundary cases, state)
-   - **Data and input handling** (validation, parsing, corruption)
-   - **Error handling** (exceptions, swallowed failures, startup)
-   - **Concurrency & async** (data races, locks, timeouts)
-   - **Lifecycle & resources** (leaks, cleanup, disposal)
-   - **Observability** (logging, metrics, tracing, diagnostic information)
-   - **Security & trust** (injection, auth, path traversal, exposure)
-   - **Files, paths & environment** (normalization, permissions)
-   - **Architecture & maintainability** (dead code, broken contracts)
-   - **Performance & scalability** (expensive ops, unbounded memory)
+For each candidate:
+- Verify against the actual implementation and documentation. Report meaningful documentation/implementation discrepancies.
+- Exclude speculative or unsupported claims.
+- Require exact `file:line` references and a supporting 1–5-line code excerpt.
+- Save each confirmed finding to THE_REPORT immediately.
 
-- Verify every candidate finding before reporting it:
-   - Verify against the actual implementation in the inspected files. Treat any meaningful discrepancy between documentation and implementation as a valid finding.
-   - Provide an exact `file:line` reference and a supporting code excerpt of 1–5 lines for every confirmed finding.
-   - Add each confirmed finding to the issue list immediately after verifying sufficient evidence.
-   - Exclude unsupported assumptions, speculative issues, and claims that cannot be verified from the inspected code.
- 
-- Write to *THE_REPORT* **Findings:** as you go. One section per issue (`### IS-NNN <Issue-Name>`):
-   - **Description:** What the code does, supported by exact `file:line` references and code excerpts.
-   - **Reasoning:** Why this is a defect and its concrete impact.
-   - **How to fix:** Minimal, actionable fix.
+Use this structure for each finding:
 
-- **Check limit:** After finishing each directory, check if you have accumulated 20 issues or more. If yes, stop inspecting further directories.
-- After inspecting is stopped write to *THE_REPORT* **Progress & Checkpoint:** A dedicated block at the end:
+`### IS-NNN <Issue-Name>`
+- **Description:** Defect, code reference, and supporting excerpt.
+- **Reasoning:** Why it is a defect and its concrete impact.
+- **How to fix:** Minimal actionable correction.
+
+After each directory, check the confirmed finding count. Stop inspecting further directories at 20 findings. Do not omit critical confirmed findings already discovered.
+
+Append this checkpoint after inspection stops:
 ```markdown
 ## Review Progress & Checkpoint
-   - **Status:** In Progress (or Completed)
-   - **Last Inspected Directory:** `<path>`
-   - **Next Directory to Process:** `<path>`
-   - **Issue Count:** `X / 20`
+- **Status:** In Progress | Completed
+- **Last Inspected Directory:** `<path>`
+- **Next Directory to Process:** `<path>`
+- **Issue Count:** `X / 20`
 ```
-- `Completed` means all directories have been checked, everything else - `In Progress`.
 
-### 4. Create report summary
-- Read *THE_REPORT* file and make a **Summary table:** from **Findings:**. For zero findings, the **Summary:** should be empty.
-- **Summary:** `| ID | Issue | Severity | File:Line |`, where Severity is one of `High`, `Medium`, or `Low`.
-- Calculated Severity based on analysis of Description and Reasoning in *THE_REPORT* and the impact of the issue on the system. 
-- Write to *THE_REPORT* **Summary:** section with the table and **Severity counts:** `X High, Y Medium, Z Low`.
+Use `Completed` only when all directories are inspected; otherwise use `In Progress`.
 
-### 5. Finalize
-Report to the user the review is finished and stop immediately. Show:
-- Checked files, Skipped files, and total files in the target
-- Number of findings, reason of stopping (20 issues limit or all files checked)
+### 3. Summary
+Read `Findings` from THE_REPORT and insert `Summary` table before `Findings`:
+
+```markdown
+## Summary
+| ID | Issue | Severity | File:Line |
+```
+
+Assign Severity to `High`, `Medium`, or `Low` based on actual impact. Include one row per finding; leave the table empty if there are none.
+
+Append: `**Severity counts:** X High, Y Medium, Z Low`
+
+### 4. Finalize
+Report and stop immediately:
+- Checked, skipped, and total file counts.
+- Total findings.
+- Stop reason: 20-finding limit or all files inspected.
