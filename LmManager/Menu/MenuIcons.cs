@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Xml.Linq;
 using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -83,7 +84,7 @@ public static class MenuIcons
         private const int Dpi = 96;
 
         private static readonly IBrush DarkBrush =
-            new SolidColorBrush(Color.Parse("#444"));
+            new SolidColorBrush(Color.Parse("#222"));
 
         private static readonly IBrush LightBrush =
             new SolidColorBrush(Color.Parse("#eee"));
@@ -105,15 +106,26 @@ public static class MenuIcons
             if (Cache.TryGetValue(geometry, out var bitmap))
                 return bitmap;
 
+            double scale = Scale;
+            if (Application.Current?.ApplicationLifetime
+                is IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                if (desktop.MainWindow != null)
+                {
+                    scale = desktop.MainWindow.RenderScaling;
+                }
+            }
+
+            var pixelSize = (int)Math.Ceiling(IconSize * scale);
             var renderTarget = new RenderTargetBitmap(
-                new PixelSize(IconSize * Scale, IconSize * Scale),
-                new Vector(Dpi * Scale, Dpi * Scale));
+                new PixelSize(pixelSize, pixelSize),
+                new Vector(Dpi * scale, Dpi * scale));
 
             using (var context = renderTarget.CreateDrawingContext())
-            using (context.PushTransform(Matrix.CreateScale(IconSize * Scale, IconSize * Scale)))
+            using (context.PushTransform(Matrix.CreateScale(IconSize, IconSize)))
             {
-                var isDark = Application.Current?.ActualThemeVariant == ThemeVariant.Dark;
-                IBrush brush = isRed ? Brushes.Red : GetIconBrush(isDark);
+                var useLightOutline = Application.Current?.ActualThemeVariant != ThemeVariant.Dark;
+                IBrush brush = isRed ? Brushes.Red : GetIconBrush(useLightOutline);
                 context.DrawGeometry(brush, null, geometry);
             }
 
@@ -140,8 +152,8 @@ public static class MenuIcons
             return StreamGeometry.Parse(string.Join(" ", pathData));
         }
 
-        private static IBrush GetIconBrush(bool isDark) =>
-            isDark? DarkBrush : LightBrush;
+        private static IBrush GetIconBrush(bool isDarkBrush) =>
+            isDarkBrush ? DarkBrush : LightBrush;
     }
 
 }
