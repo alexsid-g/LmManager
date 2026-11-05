@@ -26,6 +26,7 @@ public sealed class LlamaCppProvider : LLMServerProvider
         {
             var modelDirectory = Path.GetDirectoryName(model.Path) ?? ".";
             arguments.AddRange(["--mmproj", Path.Combine(modelDirectory, mmprojFileName)]);
+            arguments.AddRange(["--image-min-tokens", "1024"]);
         }
 
         arguments.AddRange(["--host", _settings.LlamaHost, "--port", _settings.LlamaPort.ToString()]);
