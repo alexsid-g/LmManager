@@ -26,5 +26,10 @@ public class MlxLmProvider : LLMServerProvider
     protected override string? HealthEndpoint => null;
     public override bool Supports(ModelInfo model) => model.Format == ModelFormat.Mlx;
     protected override string[] BuildArguments(ModelInfo model) =>
-        ["--model", model.Path, "--host", Host, "--port", Port.ToString()];
+        [
+            "--model", model.Path,
+            "--temp", model.Temperature.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "--host", Host,
+            "--port", Port.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        ];
 }

@@ -140,7 +140,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 var contextSize = _settings.ModelContextSizes.TryGetValue(modelPath, out var savedContextSize)
                     ? savedContextSize
                     : ModelInfo.DefaultContextSize;
-                Models.Add(model with { Path = modelPath, ContextSize = contextSize });
+                var temperature = _settings.ModelTemperatures.TryGetValue(modelPath, out var savedTemperature)
+                    ? savedTemperature
+                    : ModelInfo.DefaultTemperature;
+                Models.Add(model with { Path = modelPath, ContextSize = contextSize, Temperature = temperature });
             }
 
             StatusMessage = result.Errors.Count == 0
@@ -275,6 +278,45 @@ public partial class MainViewModel : ObservableObject, IDisposable
             else
                 _settings.ModelContextSizes.Remove(modelPath);
             StatusMessage = $"Could not save context size: {ex.Message}";
+            HasError = true;
+            _logger.Write(StatusMessage);
+        }
+
+        StateChanged?.Invoke();
+    }
+
+    public void SetModelTemperature(ModelInfo model, double temperature)
+    {
+        if (!ModelInfo.IsSupportedTemperature(temperature))
+        {
+            StatusMessage = "Choose one of the available temperature presets.";
+            HasError = true;
+            StateChanged?.Invoke();
+            return;
+        }
+
+        var modelPath = Path.GetFullPath(model.Path);
+        var hadPreviousTemperature = _settings.ModelTemperatures.TryGetValue(modelPath, out var previousTemperature);
+        _settings.ModelTemperatures[modelPath] = temperature;
+
+        try
+        {
+            _settingsStore.Save(_settings);
+            var index = Models.IndexOf(model);
+            if (index >= 0)
+                Models[index] = model with { Temperature = temperature };
+
+            StatusMessage = $"Temperature for {model.Name} set to {temperature:0.0}.";
+            HasError = false;
+            _logger.Write(StatusMessage);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            if (hadPreviousTemperature)
+                _settings.ModelTemperatures[modelPath] = previousTemperature;
+            else
+                _settings.ModelTemperatures.Remove(modelPath);
+            StatusMessage = $"Could not save temperature: {ex.Message}";
             HasError = true;
             _logger.Write(StatusMessage);
         }

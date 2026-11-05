@@ -31,6 +31,7 @@ public sealed class LlamaCppProvider : LLMServerProvider
 
         arguments.AddRange([
             "--ctx-size", model.ContextSize.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "--temp", model.Temperature.ToString(System.Globalization.CultureInfo.InvariantCulture),
             "--host", _settings.LlamaHost,
             "--port", _settings.LlamaPort.ToString(System.Globalization.CultureInfo.InvariantCulture)
         ]);

@@ -18,4 +18,5 @@ public sealed class AppSettings
     public string MlxVlmExecutable { get; set; } = "mlx_vlm.server";
 
     public Dictionary<string, int> ModelContextSizes { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<string, double> ModelTemperatures { get; set; } = new(StringComparer.Ordinal);
 }

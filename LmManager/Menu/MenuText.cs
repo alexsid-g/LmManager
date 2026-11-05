@@ -16,6 +16,7 @@ public static class MenuText
     public const string LoadModel = "Load model";
     public const string NoModels = "Empty";
     public const string ContextSizePrefix = "Context size";
+    public const string TemperaturePrefix = "Temperature";
     public const string StartModel = "Load this model";
 
     public const string ModelLabel = "Model";

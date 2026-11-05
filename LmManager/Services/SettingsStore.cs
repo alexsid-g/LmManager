@@ -33,7 +33,8 @@ public sealed class SettingsStore
                 LlamaHost = GetValueOrDefault(settings?.LlamaHost, defaults.LlamaHost),
                 LlamaPort = GetPortOrDefault(settings?.LlamaPort, defaults.LlamaPort),
                 LlamaExecutable = GetValueOrDefault(settings?.LlamaExecutable, defaults.LlamaExecutable),
-                ModelContextSizes = GetContextSizesOrDefault(settings?.ModelContextSizes)
+                ModelContextSizes = GetContextSizesOrDefault(settings?.ModelContextSizes),
+                ModelTemperatures = GetTemperaturesOrDefault(settings?.ModelTemperatures)
             };
         }
         catch (JsonException)
@@ -53,6 +54,14 @@ public sealed class SettingsStore
             ? new Dictionary<string, int>(StringComparer.Ordinal)
             : contextSizes
                 .Where(entry => !string.IsNullOrWhiteSpace(entry.Key) && entry.Value > 0)
+                .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal);
+
+    private static Dictionary<string, double> GetTemperaturesOrDefault(Dictionary<string, double>? temperatures) =>
+        temperatures is null
+            ? new Dictionary<string, double>(StringComparer.Ordinal)
+            : temperatures.Where(
+                entry => !string.IsNullOrWhiteSpace(entry.Key) &&
+                ModelInfo.IsSupportedTemperature(entry.Value))
                 .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal);
 
     public void Save(AppSettings settings)
