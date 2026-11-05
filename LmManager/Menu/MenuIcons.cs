@@ -63,7 +63,7 @@ public static class MenuIcons
         };
     }
 
-    public static Bitmap Get(string iconName)
+    public static Bitmap Get(string iconName, Action<string, Exception> reportError)
     {
         try
         {    
@@ -72,7 +72,7 @@ public static class MenuIcons
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error loading icon '{iconName}': {ex.Message}");
+            reportError($"Error loading icon '{iconName}'.", ex);
             return ErrorFallbackBitmap.Value;
         }
     }

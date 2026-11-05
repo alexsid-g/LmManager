@@ -64,20 +64,20 @@ public sealed class MenuManager(
         {
             Header = "",
             IsEnabled = true,
-            Icon = MenuIcons.Get(MenuIcons.Copy_Icon),
+            Icon = GetIcon(MenuIcons.Copy_Icon),
         };
         title.Click += (_, _) => CopyTextToClipboard(title.Header);
         _topItems[MenuKeys.Title] = title;
 
-        var modelsItem = new NativeMenuItem { Header = "", Icon = MenuIcons.Get(MenuIcons.Folder_Icon) };
+        var modelsItem = new NativeMenuItem { Header = "", Icon = GetIcon(MenuIcons.Folder_Icon) };
         var modelsMenu = new NativeMenu();
         modelsMenu.Items.Add(CreateAction(
             MenuText.ChooseFolder,
-            MenuIcons.Get(MenuIcons.FolderOpen_Icon),
+            GetIcon(MenuIcons.FolderOpen_Icon),
             async () => await viewModel.ChooseModelsDirectoryAsync(owner)));
         modelsMenu.Items.Add(CreateAction(
             MenuText.ScanNow,
-            MenuIcons.Get(MenuIcons.Search_Icon),
+            GetIcon(MenuIcons.Search_Icon),
             async () => await viewModel.ScanModelsAsync()));
         modelsItem.Menu = modelsMenu;
         _topItems[MenuKeys.Models] = modelsItem;
@@ -93,11 +93,11 @@ public sealed class MenuManager(
 
         rootMenu.Items.Add(new NativeMenuItemSeparator());
 
-        var showLog = new NativeMenuItem { Header = MenuText.ShowLog, Icon = MenuIcons.Get(MenuIcons.Document_Icon) };
+        var showLog = new NativeMenuItem { Header = MenuText.ShowLog, Icon = GetIcon(MenuIcons.Document_Icon) };
         showLog.Click += (_, _) => viewModel.OpenLogFolder();
         _topItems[MenuKeys.ShowLog] = showLog;
 
-        var exitItem = new NativeMenuItem { Header = MenuText.Quit, Icon = MenuIcons.Get(MenuIcons.Dismiss_Icon) };
+        var exitItem = new NativeMenuItem { Header = MenuText.Quit, Icon = GetIcon(MenuIcons.Dismiss_Icon) };
         exitItem.Click += (_, _) => desktop.Shutdown();
         _topItems[MenuKeys.Quit] = exitItem;
 
@@ -113,7 +113,7 @@ public sealed class MenuManager(
             Header = "",
             IsEnabled = true,
             IsVisible = false,
-            Icon = MenuIcons.Get(MenuIcons.Copy_Icon)
+            Icon = GetIcon(MenuIcons.Copy_Icon)
         };
         modelStatus.Click += (_, _) => CopyTextToClipboard(modelStatus.Header);
         serverMenu.Items.Add(modelStatus);
@@ -122,14 +122,14 @@ public sealed class MenuManager(
         var modelSelector = new NativeMenuItem
         {
             Header = MenuText.LoadModel,
-            Icon = MenuIcons.Get(MenuIcons.CloudDownload_Icon)
+            Icon = GetIcon(MenuIcons.CloudDownload_Icon)
         };
         var modelMenu = new NativeMenu();
         modelSelector.Menu = modelMenu;
         serverMenu.Items.Add(modelSelector);
         _serverModelMenus[server.Name] = modelMenu;
 
-        var stopItem = new NativeMenuItem { Icon = MenuIcons.Get(MenuIcons.Stop_Icon) };
+        var stopItem = new NativeMenuItem { Icon = GetIcon(MenuIcons.Stop_Icon) };
         stopItem.Click += async (_, _) => await viewModel.StopServerAsync(server);
         serverMenu.Items.Add(stopItem);
         _serverStopItems[server.Name] = stopItem;
@@ -170,7 +170,7 @@ public sealed class MenuManager(
 
             modelOptionsMenu.Items.Add(CreateAction(
                 MenuText.StartModel,
-                MenuIcons.Get(MenuIcons.Play_Icon),
+                GetIcon(MenuIcons.Play_Icon),
                 async () => await viewModel.StartModelAsync(server, model)));
 
             item.Menu = modelOptionsMenu;
@@ -192,7 +192,7 @@ public sealed class MenuManager(
             var value = option.Value;
             var optionItem = CreateAction(
                 option.Label,
-                MenuIcons.Get(MenuIcons.Settings_Icon),
+                GetIcon(MenuIcons.Settings_Icon),
                 () =>
                 {
                     selectOption(value);
@@ -216,6 +216,9 @@ public sealed class MenuManager(
             // clipboard unavailable - ignore
         }
     }
+
+    private Avalonia.Media.Imaging.Bitmap GetIcon(string iconName) =>
+        MenuIcons.Get(iconName, viewModel.ReportError);
 
     private static NativeMenuItem CreateAction(string header, Avalonia.Media.Imaging.Bitmap icon, Func<Task> action)
     {

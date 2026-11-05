@@ -42,6 +42,8 @@ public sealed class AppLogger : IDisposable
 
     public void Write(string message) => _logger.Information("{Message}", message);
 
+    public void WriteError(string message, Exception exception) => _logger.Error(exception, "{Message}", message);
+
     public void OpenLogFolder() => OpenPath(Path.GetDirectoryName(LogFilePath)!);
 
     private static void OpenPath(string path)

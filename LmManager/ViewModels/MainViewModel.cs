@@ -32,6 +32,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public ObservableCollection<ServerViewModel> Servers { get; } = [];
     public event Action? StateChanged;
 
+    public void ReportError(string message, Exception exception) => _logger.WriteError(message, exception);
+
     public MainViewModel()
     {
         _settings = _settingsStore.Load();
