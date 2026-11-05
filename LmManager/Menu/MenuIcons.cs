@@ -55,13 +55,7 @@ public static class MenuIcons
     public const string Stop_Icon = "stop_regular";
     public const string Warning_Icon = "warning_regular";
 
-    static MenuIcons()
-    {
-        Application.Current?.ActualThemeVariantChanged += (_, _) =>
-        {
-            Cache.Clear();
-        };
-    }
+    public static void ClearMenuIconsCache() => Cache.Clear();
 
     public static Bitmap Get(string iconName, Action<string, Exception> reportError)
     {

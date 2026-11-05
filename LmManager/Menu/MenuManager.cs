@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -27,6 +28,11 @@ public sealed class MenuManager(
         _built = true;
 
         Refresh();
+        Application.Current?.ActualThemeVariantChanged += (_, _) =>
+        {
+            MenuIcons.ClearMenuIconsCache();
+            Rebuild();
+        };
     }
 
     public void Refresh()
@@ -103,6 +109,16 @@ public sealed class MenuManager(
 
         rootMenu.Items.Add(showLog);
         rootMenu.Items.Add(exitItem);
+    }
+
+    private void Rebuild()
+    {
+        _topItems.Clear();
+        _serverModelMenus.Clear();
+        _serverModelStatusItems.Clear();
+        _serverStopItems.Clear();
+        CreateTopLevelItems();
+        Refresh();
     }
 
     private void CreateServersMenu(ServerViewModel server)
