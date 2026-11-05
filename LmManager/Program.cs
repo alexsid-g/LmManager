@@ -28,18 +28,18 @@ sealed class Program
 
         var path = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
         var pathEntries = path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
-        if (pathEntries.Any(entry =>
-                string.Equals(
-                    Path.TrimEndingDirectorySeparator(entry),
-                    homebrewBin,
-                    StringComparison.Ordinal)))
+        if (pathEntries.Any(entry => homebrewBin.Equals(Path.TrimEndingDirectorySeparator(entry), StringComparison.Ordinal)))
         {
             return;
         }
 
-        Environment.SetEnvironmentVariable(
-            "PATH",
-            string.IsNullOrEmpty(path) ? homebrewBin : $"{homebrewBin}{Path.PathSeparator}{path}");
+        var newPath = homebrewBin;
+        if (!string.IsNullOrEmpty(path))
+        {
+            newPath += $"{homebrewBin}{Path.PathSeparator}{path}";
+        }
+
+        Environment.SetEnvironmentVariable("PATH", newPath);
     }
 
     // Avalonia configuration, don't remove; also used by visual designer.
@@ -50,5 +50,9 @@ sealed class Program
             .WithDeveloperTools()
 #endif
             .WithInterFont()
+            .With(new MacOSPlatformOptions
+            {
+                ShowInDock = false
+            })
             .LogToTrace();
 }
