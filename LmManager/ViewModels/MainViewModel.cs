@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using LmManager.Models;
 using LmManager.Services;
@@ -37,9 +38,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _modelsDirectory = _settings.ModelsDirectory;
         _logger = new AppLogger(_settings.LogsDirectory, message =>
         {
-            StatusMessage = message;
-            HasError = true;
-            StateChanged?.Invoke();
+            Dispatcher.UIThread.Post(() =>
+            {
+                StatusMessage = message;
+                HasError = true;
+                StateChanged?.Invoke();
+            });
         });
         _logger.Write($"Application started. Settings file: {_settingsStore.SettingsPath}");
 
