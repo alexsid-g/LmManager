@@ -29,7 +29,11 @@ public sealed class LlamaCppProvider : LLMServerProvider
             arguments.AddRange(["--image-min-tokens", "2048"]);
         }
 
-        arguments.AddRange(["--host", _settings.LlamaHost, "--port", _settings.LlamaPort.ToString()]);
+        arguments.AddRange([
+            "--ctx-size", model.ContextSize.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "--host", _settings.LlamaHost,
+            "--port", _settings.LlamaPort.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        ]);
         return arguments.ToArray();
     }
 }

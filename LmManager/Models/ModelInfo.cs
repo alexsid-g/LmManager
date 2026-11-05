@@ -13,6 +13,9 @@ public sealed record ModelInfo(
     long SizeBytes,
     string? MmprojFileName = null)
 {
+    public const int DefaultContextSize = 131072;
+
+    public int ContextSize { get; init; } = DefaultContextSize;
     public bool HasMmproj => !string.IsNullOrWhiteSpace(MmprojFileName);
     public string DisplayName => 
         $"{Name}{(HasMmproj ? " (+mmproj)" : string.Empty)} ({Format}, {FormatSize(SizeBytes)})";

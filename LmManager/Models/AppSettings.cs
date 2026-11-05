@@ -16,4 +16,6 @@ public sealed class AppSettings
     public string MlxVlmHost { get; set; } = "127.0.0.1";
     public int MlxVlmPort { get; set; } = 4903;
     public string MlxVlmExecutable { get; set; } = "mlx_vlm.server";
+
+    public Dictionary<string, int> ModelContextSizes { get; set; } = new(StringComparer.Ordinal);
 }

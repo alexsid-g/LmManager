@@ -135,7 +135,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
             var result = await Task.Run(() => _modelScanner.Scan(ModelsDirectory));
             Models.Clear();
             foreach (var model in result.Models)
-                Models.Add(model);
+            {
+                var modelPath = Path.GetFullPath(model.Path);
+                var contextSize = _settings.ModelContextSizes.TryGetValue(modelPath, out var savedContextSize)
+                    ? savedContextSize
+                    : ModelInfo.DefaultContextSize;
+                Models.Add(model with { Path = modelPath, ContextSize = contextSize });
+            }
 
             StatusMessage = result.Errors.Count == 0
                 ? $"Models found: {Models.Count}"
@@ -227,6 +233,52 @@ public partial class MainViewModel : ObservableObject, IDisposable
             HasError = true;
             _logger.Write(StatusMessage);
         }
+        StateChanged?.Invoke();
+    }
+
+    public void SetModelContextSize(ModelInfo model, int contextSize)
+    {
+        if (model.Format != ModelFormat.Gguf)
+        {
+            StatusMessage = "Context size can only be configured for GGUF models.";
+            HasError = true;
+            StateChanged?.Invoke();
+            return;
+        }
+
+        if (contextSize <= 0)
+        {
+            StatusMessage = "Context size must be a positive number.";
+            HasError = true;
+            StateChanged?.Invoke();
+            return;
+        }
+
+        var modelPath = Path.GetFullPath(model.Path);
+        var hadPreviousContextSize = _settings.ModelContextSizes.TryGetValue(modelPath, out var previousContextSize);
+        _settings.ModelContextSizes[modelPath] = contextSize;
+        try
+        {
+            _settingsStore.Save(_settings);
+            var index = Models.IndexOf(model);
+            if (index >= 0)
+                Models[index] = model with { ContextSize = contextSize };
+
+            StatusMessage = $"Context size for {model.Name} set to {contextSize:N0}.";
+            HasError = false;
+            _logger.Write(StatusMessage);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            if (hadPreviousContextSize)
+                _settings.ModelContextSizes[modelPath] = previousContextSize;
+            else
+                _settings.ModelContextSizes.Remove(modelPath);
+            StatusMessage = $"Could not save context size: {ex.Message}";
+            HasError = true;
+            _logger.Write(StatusMessage);
+        }
+
         StateChanged?.Invoke();
     }
 

@@ -228,7 +228,38 @@ public partial class App : Application
 
         foreach (var model in compatibleModels)
         {
-            var item = CreateAction(model.DisplayName, MenuIcons.Get(MenuIcons.Play_Icon), async () => await viewModel.StartModelAsync(server, model));
+            var item = new NativeMenuItem { Header = model.DisplayName };
+            var modelOptionsMenu = new NativeMenu();
+            modelOptionsMenu.Items.Add(CreateAction(
+                MenuText.StartModel,
+                MenuIcons.Get(MenuIcons.Play_Icon),
+                async () => await viewModel.StartModelAsync(server, model)));
+
+            if (model.Format == Models.ModelFormat.Gguf)
+            {
+                var contextSizeItem = new NativeMenuItem
+                {
+                    Header = $"{MenuText.ContextSizePrefix}: {model.ContextSize:N0}"
+                };
+                var contextSizeMenu = new NativeMenu();
+                foreach (var contextSize in new[] { 32768, 65536, 131072 })
+                {
+                    var selectedContextSize = contextSize;
+                    var sizeItem = CreateAction(
+                        $"{selectedContextSize:N0} tokens",
+                        MenuIcons.Get(MenuIcons.Settings_Icon),
+                        () =>
+                        {
+                            viewModel.SetModelContextSize(model, selectedContextSize);
+                            return Task.CompletedTask;
+                        });
+                    sizeItem.IsEnabled = selectedContextSize != model.ContextSize;
+                    contextSizeMenu.Items.Add(sizeItem);
+                }
+                contextSizeItem.Menu = contextSizeMenu;
+                modelOptionsMenu.Items.Add(contextSizeItem);
+            }
+            item.Menu = modelOptionsMenu;
             item.ToolTip = model.Path;
             modelMenu.Items.Add(item);
         }

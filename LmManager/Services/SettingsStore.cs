@@ -32,7 +32,8 @@ public sealed class SettingsStore
                 MlxVlmExecutable = GetValueOrDefault(settings?.MlxVlmExecutable, defaults.MlxVlmExecutable),
                 LlamaHost = GetValueOrDefault(settings?.LlamaHost, defaults.LlamaHost),
                 LlamaPort = GetPortOrDefault(settings?.LlamaPort, defaults.LlamaPort),
-                LlamaExecutable = GetValueOrDefault(settings?.LlamaExecutable, defaults.LlamaExecutable)
+                LlamaExecutable = GetValueOrDefault(settings?.LlamaExecutable, defaults.LlamaExecutable),
+                ModelContextSizes = GetContextSizesOrDefault(settings?.ModelContextSizes)
             };
         }
         catch (JsonException)
@@ -46,6 +47,13 @@ public sealed class SettingsStore
 
     private static int GetPortOrDefault(int? port, int defaultValue) =>
         port is >= 1 and <= 65535 ? port.Value : defaultValue;
+
+    private static Dictionary<string, int> GetContextSizesOrDefault(Dictionary<string, int>? contextSizes) =>
+        contextSizes is null
+            ? new Dictionary<string, int>(StringComparer.Ordinal)
+            : contextSizes
+                .Where(entry => !string.IsNullOrWhiteSpace(entry.Key) && entry.Value > 0)
+                .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal);
 
     public void Save(AppSettings settings)
     {
