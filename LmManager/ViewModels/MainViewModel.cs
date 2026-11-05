@@ -265,10 +265,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
         ServerViewModel server,
         Func<ServerViewModel, bool> isDesiredState)
     {
-        for (var attempt = 0; attempt < 3; attempt++)
+        for (var i = 1; i <= 3; i++)
         {
-            await Task.Delay(TimeSpan.FromSeconds(1));
+            await Task.Delay(TimeSpan.FromSeconds(i));
             await server.RefreshAsync();
+
             StateChanged?.Invoke();
             if (isDesiredState(server))
                 return true;

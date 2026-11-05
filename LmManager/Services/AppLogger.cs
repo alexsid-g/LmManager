@@ -11,18 +11,33 @@ public sealed class AppLogger : IDisposable
 
     public AppLogger(string directory, Action<string> reportError)
     {
-        Directory.CreateDirectory(directory);
-        LogFilePath = Path.Combine(directory, "lm-manager.log");
+        var logDirectory = ResolveDirectory(directory);
+        Directory.CreateDirectory(logDirectory);
+        LogFilePath = Path.Combine(logDirectory, "lm-manager.log");
         SelfLog.Enable(reportError);
         _logger = new LoggerConfiguration()
             .MinimumLevel.Information()
             .WriteTo.File(
                 LogFilePath,
+                buffered: false,
                 fileSizeLimitBytes: 1024 * 1024,
                 rollOnFileSizeLimit: true,
-                retainedFileCountLimit: 5)
+                retainedFileCountLimit: 5,
+                shared: true)
             .CreateLogger();
         _logger.Information("Log file: {Path}", LogFilePath);
+    }
+
+    private static string ResolveDirectory(string directory)
+    {
+        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (directory == "~")
+            directory = homeDirectory;
+        else if (directory.StartsWith($"~{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
+                 directory.StartsWith($"~{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal))
+            directory = Path.Combine(homeDirectory, directory[2..]);
+
+        return Path.GetFullPath(directory);
     }
 
     public void Write(string message) => _logger.Information("{Message}", message);
