@@ -152,8 +152,12 @@ public sealed class ModelScanner
         Span<byte> lengthBuffer = stackalloc byte[8];
         stream.ReadExactly(lengthBuffer);
 
+        // do not allow unreasonably large headers
+        const int maxHeaderSize = 1024 * 1024;
         var headerLength = (long)BitConverter.ToUInt64(lengthBuffer);
-        if (headerLength > stream.Length - 8 || headerLength > 1024 * 1024)
+        if (headerLength <= 0 ||
+            headerLength > stream.Length - 8 || 
+            headerLength > maxHeaderSize)
             return false;
 
         var header = new byte[headerLength];

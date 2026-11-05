@@ -72,7 +72,7 @@ public sealed class MenuManager(
             IsEnabled = true,
             Icon = GetIcon(MenuIcons.Copy_Icon),
         };
-        title.Click += (_, _) => CopyTextToClipboard(title.Header);
+        title.Click += async (_, _) => await CopyTextToClipboardAsync(title.Header);
         _topItems[MenuKeys.Title] = title;
 
         var modelsItem = new NativeMenuItem { Header = "", Icon = GetIcon(MenuIcons.Folder_Icon) };
@@ -131,7 +131,7 @@ public sealed class MenuManager(
             IsVisible = false,
             Icon = GetIcon(MenuIcons.Copy_Icon)
         };
-        modelStatus.Click += (_, _) => CopyTextToClipboard(modelStatus.Header);
+        modelStatus.Click += async (_, _) => await CopyTextToClipboardAsync(modelStatus.Header);
         serverMenu.Items.Add(modelStatus);
         _serverModelStatusItems[server.Name] = modelStatus;
 
@@ -221,15 +221,24 @@ public sealed class MenuManager(
         return item;
     }
 
-    private void CopyTextToClipboard(string text)
+    private async Task CopyTextToClipboardAsync(string text)
     {
+        var clipboard = owner.Clipboard;
+        if (clipboard is null)
+        {
+            viewModel.ReportError(
+                "Could not copy text to clipboard: clipboard is unavailable.",
+                new InvalidOperationException("The window has no clipboard service."));
+            return;
+        }
+
         try
         {
-            owner.Clipboard?.SetTextAsync(text);
+            await clipboard.SetTextAsync(text);
         }
-        catch
+        catch (Exception ex)
         {
-            // clipboard unavailable - ignore
+            viewModel.ReportError("Could not copy text to clipboard.", ex);
         }
     }
 
