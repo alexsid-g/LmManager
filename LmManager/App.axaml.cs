@@ -24,11 +24,17 @@ public partial class App : Application
             desktop.Exit += (_, _) => viewModel.Dispose();
 
             var window = new MainWindow { DataContext = viewModel };
-            window.Opened += (_, _) =>
+            window.Opened += async (_, _) =>
             {
-                var initialization = viewModel.InitializeAsync();
                 window.Hide();
-                _ = initialization;
+                try
+                {
+                    await viewModel.InitializeAsync();
+                }
+                catch (Exception ex)
+                {
+                    viewModel.ReportError("Initialization failed.", ex);
+                }
             };
             desktop.MainWindow = window;
 
@@ -49,8 +55,19 @@ public partial class App : Application
             menu.Opening += async (_, _) =>
             {
                 isMenuOpen = true;
-                await viewModel.RefreshAsync();
-                menuManager.Refresh();
+                try
+                {
+                    await viewModel.RefreshAsync();
+                }
+                catch (Exception ex)
+                {
+                    viewModel.ReportError("Could not refresh server status.", ex);
+                    isMenuOpen = false;
+                }
+                finally
+                {
+                    menuManager.Refresh();
+                }
             };
             menu.Closed += (_, _) =>
             {
@@ -64,7 +81,17 @@ public partial class App : Application
                 IsVisible = true,
                 Menu = menu
             };
-            trayIcon.Clicked += async (_, _) => await viewModel.RefreshAsync();
+            trayIcon.Clicked += async (_, _) =>
+            {
+                try
+                {
+                    await viewModel.RefreshAsync();
+                }
+                catch (Exception ex)
+                {
+                    viewModel.ReportError("Could not refresh server status.", ex);
+                }
+            };
             viewModel.StateChanged += () =>
                 Dispatcher.UIThread.Post(() =>
                 {

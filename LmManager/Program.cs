@@ -33,11 +33,9 @@ sealed class Program
             return;
         }
 
-        var newPath = homebrewBin;
-        if (!string.IsNullOrEmpty(path))
-        {
-            newPath += $"{homebrewBin}{Path.PathSeparator}{path}";
-        }
+        var newPath = string.IsNullOrEmpty(path)
+            ? homebrewBin
+            : $"{homebrewBin}{Path.PathSeparator}{path}";
 
         Environment.SetEnvironmentVariable("PATH", newPath);
     }

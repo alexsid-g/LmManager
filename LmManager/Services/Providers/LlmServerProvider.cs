@@ -35,6 +35,8 @@ public abstract class LLMServerProvider : IDisposable
 
     public async Task<ServerStatus> GetStatusAsync()
     {
+        _ = GetBaseAddressUri();
+
         // llama.cpp exposes a dedicated /health endpoint: treat "status": "ok" as running.
         if (!string.IsNullOrWhiteSpace(HealthEndpoint))
         {
@@ -49,7 +51,7 @@ public abstract class LLMServerProvider : IDisposable
 
     private async Task<bool> CheckHealthAsync()
     {
-        var endpoint = new Uri(new Uri(Address), HealthEndpoint);
+        var endpoint = CreateEndpoint(HealthEndpoint!);
         using var json = await GetJsonAsync(endpoint);
         if (json is null)
             return false;
@@ -61,19 +63,43 @@ public abstract class LLMServerProvider : IDisposable
 
     private async Task<string?> GetLoadedModelIdAsync()
     {
-        var endpoint = new Uri(new Uri(Address), ModelsEndpoint);
+        var endpoint = CreateEndpoint(ModelsEndpoint);
         using var json = await GetJsonAsync(endpoint);
         return json is null ? null : GetModelId(json.RootElement);
     }
 
     private async Task<ServerStatus> GetStatusViaModelsApiAsync()
     {
-        var endpoint = new Uri(new Uri(Address), ModelsEndpoint);
+        var endpoint = CreateEndpoint(ModelsEndpoint);
         using var json = await GetJsonAsync(endpoint);
         if (json is null)
             return new ServerStatus(false);
 
         return new ServerStatus(true, GetModelId(json.RootElement));
+    }
+
+    private Uri CreateEndpoint(string endpoint)
+    {
+        var baseAddress = GetBaseAddressUri();
+        if (Uri.TryCreate(baseAddress, endpoint, out var requestUri))
+            return requestUri;
+
+        throw new InvalidOperationException($"Invalid endpoint '{endpoint}' for server address '{Address}'.");
+    }
+
+    private Uri GetBaseAddressUri()
+    {
+        var address = Address;
+        if (Uri.TryCreate(address, UriKind.Absolute, out var baseAddress) &&
+            (baseAddress.Scheme == Uri.UriSchemeHttp || baseAddress.Scheme == Uri.UriSchemeHttps) &&
+            !string.IsNullOrWhiteSpace(baseAddress.Host) &&
+            baseAddress.HostNameType != UriHostNameType.Unknown)
+        {
+            return baseAddress;
+        }
+
+        throw new InvalidOperationException(
+            $"Invalid server address '{address}'. Check the host and port in the application settings.");
     }
 
     private async Task<JsonDocument?> GetJsonAsync(Uri endpoint)
@@ -126,6 +152,8 @@ public abstract class LLMServerProvider : IDisposable
     {
         if (!Supports(model))
             throw new InvalidOperationException($"{Name} does not support the {model.Format} format.");
+
+        _ = GetBaseAddressUri();
 
         var resolvedExecutable = ExecutableResolver.Find(Executable, ExecutableName)
             ?? throw new InvalidOperationException(
@@ -264,14 +292,20 @@ public abstract class LLMServerProvider : IDisposable
         if (!OperatingSystem.IsMacOS())
             throw new PlatformNotSupportedException("Stopping an externally started server is currently supported on macOS only.");
 
-        var endpoint = new Uri(Address);
-        var listenerOutput = await RunCommandAsync(
+        var endpoint = GetBaseAddressUri();
+        var listenerResult = await RunCommandAsync(
             "lsof",
             "-nP",
             $"-iTCP:{endpoint.Port}",
             "-sTCP:LISTEN",
             "-t");
-        var processIds = listenerOutput
+        if (listenerResult.ExitCode != 0 &&
+            !(listenerResult.ExitCode == 1 && string.IsNullOrWhiteSpace(listenerResult.Output)))
+        {
+            throw CreateCommandException("lsof", listenerResult);
+        }
+
+        var processIds = listenerResult.Output
             .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
             .Select(line => int.TryParse(line, out var processId) ? processId : 0)
             .Where(processId => processId > 0)
@@ -284,9 +318,13 @@ public abstract class LLMServerProvider : IDisposable
         var matchingProcesses = new List<(int ProcessId, string CommandLine)>();
         foreach (var processId in processIds)
         {
-            var commandLine = await RunCommandAsync("ps", "-p", processId.ToString(), "-o", "command=");
-            if (IsConfiguredExecutable(commandLine))
-                matchingProcesses.Add((processId, commandLine));
+            var processResult = await RunCommandAsync("ps", "-p", processId.ToString(), "-o", "command=");
+            if (processResult.ExitCode == 1 && string.IsNullOrWhiteSpace(processResult.Output))
+                continue;
+            if (processResult.ExitCode != 0)
+                throw CreateCommandException("ps", processResult);
+            if (IsConfiguredExecutable(processResult.Output))
+                matchingProcesses.Add((processId, processResult.Output));
         }
 
         if (matchingProcesses.Count == 0)
@@ -295,7 +333,10 @@ public abstract class LLMServerProvider : IDisposable
 
         foreach (var (processId, _) in matchingProcesses)
         {
-            await RunCommandAsync("kill", "-TERM", processId.ToString());
+            var killResult = await RunCommandAsync("kill", "-TERM", processId.ToString());
+            if (killResult.ExitCode != 0)
+                throw CreateCommandException("kill", killResult);
+
             try
             {
                 using var process = Process.GetProcessById(processId);
@@ -324,7 +365,19 @@ public abstract class LLMServerProvider : IDisposable
                 string.Equals(Path.GetFileName(token), executableName, StringComparison.Ordinal));
     }
 
-    private static async Task<string> RunCommandAsync(string executable, params string[] arguments)
+    private readonly record struct CommandResult(int ExitCode, string Output, string Error);
+
+    private static IOException CreateCommandException(string executable, CommandResult result)
+    {
+        var details = string.IsNullOrWhiteSpace(result.Error)
+            ? result.Output
+            : result.Error;
+        return new IOException(string.IsNullOrWhiteSpace(details)
+            ? $"Command '{executable}' exited with code {result.ExitCode}."
+            : details.Trim());
+    }
+
+    private static async Task<CommandResult> RunCommandAsync(string executable, params string[] arguments)
     {
         using var process = new Process
         {
@@ -346,6 +399,7 @@ public abstract class LLMServerProvider : IDisposable
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+
         try
         {
             await process.WaitForExitAsync(timeout.Token);
@@ -354,21 +408,14 @@ public abstract class LLMServerProvider : IDisposable
         {
             if (!process.HasExited)
                 process.Kill(entireProcessTree: true);
+
             await process.WaitForExitAsync();
             await Task.WhenAll(outputTask, errorTask);
             throw new IOException($"Command '{executable}' timed out.", ex);
         }
 
         await Task.WhenAll(outputTask, errorTask);
-        if (process.ExitCode != 0)
-        {
-            var error = await errorTask;
-            throw new IOException(string.IsNullOrWhiteSpace(error)
-                ? $"Command '{executable}' exited with code {process.ExitCode}."
-                : error.Trim());
-        }
-
-        return await outputTask;
+        return new CommandResult(process.ExitCode, await outputTask, await errorTask);
     }
 
     public virtual void Dispose()

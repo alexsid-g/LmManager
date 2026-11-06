@@ -6,6 +6,7 @@ namespace LmManager.Services;
 public sealed class SettingsStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+
     public string SettingsPath { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "LmManager",
@@ -13,13 +14,13 @@ public sealed class SettingsStore
 
     public AppSettings Load()
     {
+        var defaults = new AppSettings();
         if (!File.Exists(SettingsPath))
-            return new AppSettings();
+            return defaults;
 
         try
         {
             var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath));
-            var defaults = new AppSettings();
             return new AppSettings
             {
                 ModelsDirectory = GetValueOrDefault(settings?.ModelsDirectory, defaults.ModelsDirectory),
@@ -37,9 +38,9 @@ public sealed class SettingsStore
                 ModelTemperatures = GetTemperaturesOrDefault(settings?.ModelTemperatures)
             };
         }
-        catch (JsonException)
+        catch (Exception)
         {
-            return new AppSettings();
+            return defaults;
         }
     }
 
@@ -68,6 +69,7 @@ public sealed class SettingsStore
     {
         var directory = Path.GetDirectoryName(SettingsPath)!;
         Directory.CreateDirectory(directory);
+
         var temporaryPath = $"{SettingsPath}.tmp";
         File.WriteAllText(temporaryPath, JsonSerializer.Serialize(settings, JsonOptions));
         File.Move(temporaryPath, SettingsPath, overwrite: true);
