@@ -203,6 +203,7 @@ public sealed class MenuManager(
     {
         var item = new NativeMenuItem { Header = header, Icon = GetIcon(MenuIcons.Settings_Icon) };
         var menu = new NativeMenu();
+        var optionItems = new List<(T Value, NativeMenuItem Item)>();
         foreach (var option in options)
         {
             var value = option.Value;
@@ -211,10 +212,14 @@ public sealed class MenuManager(
                 GetIcon(MenuIcons.Info_Icon),
                 () =>
                 {
+                    // disable what was just picked and enable every other option
                     selectOption(value);
+                    foreach (var (otherValue, otherItem) in optionItems)
+                        otherItem.IsEnabled = !EqualityComparer<T>.Default.Equals(otherValue, value);
                     return Task.CompletedTask;
                 });
             optionItem.IsEnabled = !EqualityComparer<T>.Default.Equals(value, selectedValue);
+            optionItems.Add((value, optionItem));
             menu.Items.Add(optionItem);
         }
         item.Menu = menu;
