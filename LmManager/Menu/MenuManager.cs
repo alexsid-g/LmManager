@@ -179,9 +179,9 @@ public sealed class MenuManager(
 
             if (model.Format == ModelFormat.Gguf)
                 modelOptionsMenu.Items.Add(CreateOptionsMenu(
-                    $"{MenuText.ContextSizePrefix}: {model.ContextSize:N0}",
+                    $"{MenuText.ContextSizePrefix}: {model.ContextSize / 1000:N0}k",
                     model.ContextSize,
-                    model.ContextSizeOptions.Select(size => (size, $"{size:N0} tokens")),
+                    model.ContextSizeOptions.Select(size => (size, $"{size / 1000:N0}k tokens")),
                     value => viewModel.SetModelContextSize(model, value)));
 
             modelOptionsMenu.Items.Add(CreateAction(
@@ -201,14 +201,14 @@ public sealed class MenuManager(
         IEnumerable<(T Value, string Label)> options,
         Action<T> selectOption)
     {
-        var item = new NativeMenuItem { Header = header };
+        var item = new NativeMenuItem { Header = header, Icon = GetIcon(MenuIcons.Settings_Icon) };
         var menu = new NativeMenu();
         foreach (var option in options)
         {
             var value = option.Value;
             var optionItem = CreateAction(
                 option.Label,
-                GetIcon(MenuIcons.Settings_Icon),
+                GetIcon(MenuIcons.Info_Icon),
                 () =>
                 {
                     selectOption(value);

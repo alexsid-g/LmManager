@@ -19,10 +19,10 @@ public sealed record ModelInfo(
     public static IReadOnlyList<(double Value, string Label)> TemperatureOptions { get; } =
         Array.AsReadOnly<(double Value, string Label)>(
         [
-            (0.3, "Development"),
-            (0.5, "Analytics"),
-            (0.7, "Regular"),
-            (0.9, "Creative"),
+            (0.3, "Development (0.3)"),
+            (0.5, "Analytics (0.5)"),
+            (0.7, "Regular (0.7)"),
+            (0.9, "Creative (0.9)"),
         ]);
 
     public IReadOnlyList<int> ContextSizeOptions { get; } =  [32768, 65536, 131072];
