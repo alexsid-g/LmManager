@@ -11,6 +11,14 @@ public static class MenuText
     public const string StatusSeparator = " - ";
 
     public const string ModelsFolderPrefix = "Models folder";
+    public const string CurrentStatus = "Current Status (copy)";
+    public const string ServerAddressLabel = "Server address";
+    public const string ModelParametersLabel = "Model params";
+    public const string StatusMessageLabel = "Status message";
+    public const string OpenServer = "Open server (LLAMA.CPP)";
+    public const string OpenModel = "Open model (LLAMA.CPP)";
+    public const string OpenParams = "Open params (LLAMA.CPP)";
+    public const string ValueUnavailable = "Not available";
     public const string ChooseFolder = "Choose folder...";
     public const string ScanNow = "Scan now";
     public const string LoadModel = "Load model";

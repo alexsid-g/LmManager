@@ -31,16 +31,26 @@ public sealed record ModelInfo(
     public double Temperature { get; init; } = DefaultTemperature;
     public bool HasMmproj => !string.IsNullOrWhiteSpace(MmprojFileName);
 
-    public string DisplayName => 
-        $"{Name}{(HasMmproj ? " (+mmproj)" : string.Empty)} ({Format}, {FormatSize(SizeBytes)})";
+    public string DisplayName => $"{Name} ({GetFormatLabel(Format)})";
 
     public static bool IsSupportedTemperature(double temperature) =>
         TemperatureOptions.Any(option => option.Value == temperature);
 
-    private static string FormatSize(long sizeBytes) =>
-        sizeBytes >= 1024L * 1024 * 1024
-            ? $"{sizeBytes / (1024d * 1024 * 1024):0.0} GB"
-            : $"{sizeBytes / (1024d * 1024):0} MB";
+    public static string GetFormatLabel(ModelFormat format) =>
+        format switch
+        {
+            ModelFormat.Gguf => "GGUF",
+            ModelFormat.Mlx => "MLX",
+            _ => throw new ArgumentOutOfRangeException(nameof(format), format, null)
+        };
 }
 
-public sealed record ServerStatus(bool IsRunning, string? CurrentModel = null);
+public sealed record ServerStatus(
+    bool IsRunning,
+    string? CurrentModel = null,
+    ServerRuntimeParameters? RuntimeParameters = null);
+
+public sealed record ServerRuntimeParameters(int? ContextSize = null, double? Temperature = null)
+{
+    public bool HasValues => ContextSize.HasValue || Temperature.HasValue;
+}

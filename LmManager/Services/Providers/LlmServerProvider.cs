@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Text.Json;
 using LmManager.Models;
+using LmManager.Utilities;
 
 namespace LmManager.Services;
 
@@ -18,9 +19,11 @@ public abstract class LLMServerProvider : IDisposable
 
     public abstract string Name { get; }
     public abstract string Address { get; }
+    public abstract ModelFormat SupportedModelFormat { get; }
     protected abstract string Executable { get; }
     protected abstract string ExecutableName { get; }
     protected abstract string ModelsEndpoint { get; }
+    protected virtual string? RuntimeParametersEndpoint => null;
     protected virtual string[] ValidationArguments => ["--help"];
     /// <summary>
     /// Optional liveness endpoint. When non-null the server is considered running
@@ -42,7 +45,10 @@ public abstract class LLMServerProvider : IDisposable
         {
             if (!await CheckHealthAsync())
                 return new ServerStatus(false);
-            return new ServerStatus(true, await GetLoadedModelIdAsync());
+            return new ServerStatus(
+                true,
+                await GetLoadedModelIdAsync(),
+                await GetRuntimeParametersAsync());
         }
 
         // MLX-LM has no dedicated health endpoint: liveness comes from /v1/models.
@@ -65,7 +71,7 @@ public abstract class LLMServerProvider : IDisposable
     {
         var endpoint = CreateEndpoint(ModelsEndpoint);
         using var json = await GetJsonAsync(endpoint);
-        return json is null ? null : GetModelId(json.RootElement);
+        return json is null ? null : JsonUtilities.GetModelId(json.RootElement);
     }
 
     private async Task<ServerStatus> GetStatusViaModelsApiAsync()
@@ -75,7 +81,39 @@ public abstract class LLMServerProvider : IDisposable
         if (json is null)
             return new ServerStatus(false);
 
-        return new ServerStatus(true, GetModelId(json.RootElement));
+        return new ServerStatus(
+            true,
+            JsonUtilities.GetModelId(json.RootElement),
+            await GetRuntimeParametersAsync());
+    }
+
+    private async Task<ServerRuntimeParameters?> GetRuntimeParametersAsync()
+    {
+        if (string.IsNullOrWhiteSpace(RuntimeParametersEndpoint))
+            return null;
+
+        using var json = await GetJsonAsync(CreateEndpoint(RuntimeParametersEndpoint));
+        if (json is null)
+            return null;
+
+        var root = json.RootElement;
+        var settings = root.ValueKind == JsonValueKind.Object &&
+            JsonUtilities.TryGetProperty(root, "default_generation_settings", out var defaultSettings)
+            ? defaultSettings
+            : default;
+        var parameters = settings.ValueKind == JsonValueKind.Object &&
+            JsonUtilities.TryGetProperty(settings, "params", out var modelParams)
+            ? modelParams
+            : default;
+
+        var contextSize = JsonUtilities.TryGetInteger(root, ["n_ctx", "context_size", "context_length"]);
+        contextSize ??= JsonUtilities.TryGetInteger(settings, ["n_ctx", "context_size", "context_length"]);
+
+        var temperature = JsonUtilities.TryGetNumber(settings, ["temperature"]);
+        temperature ??= JsonUtilities.TryGetNumber(parameters, ["temperature"]);
+
+        var result = new ServerRuntimeParameters(contextSize, temperature);
+        return result.HasValues ? result : null;
     }
 
     private Uri CreateEndpoint(string endpoint)
@@ -121,31 +159,6 @@ public abstract class LLMServerProvider : IDisposable
         {
             return null;
         }
-    }
-
-    private static string? GetModelId(JsonElement root)
-    {
-        if (root.ValueKind != JsonValueKind.Object ||
-            !root.TryGetProperty("data", out var data) ||
-            data.ValueKind != JsonValueKind.Array)
-        {
-            return null;
-        }
-
-        foreach (var model in data.EnumerateArray())
-        {
-            if (model.ValueKind != JsonValueKind.Object ||
-                !model.TryGetProperty("id", out var id) ||
-                id.ValueKind != JsonValueKind.String ||
-                string.IsNullOrWhiteSpace(id.GetString()))
-            {
-                continue;
-            }
-
-            return id.GetString();
-        }
-
-        return null;
     }
 
     public async Task StartAsync(ModelInfo model)

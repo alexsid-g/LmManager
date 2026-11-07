@@ -230,6 +230,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             }
 
             await server.Provider.StartAsync(model);
+            server.SetStartedModel(model);
             StatusMessage = $"Started model {model.Name} on {server.Name}.";
             HasError = false;
             _logger.Write(StatusMessage);
@@ -398,10 +399,15 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
 public sealed class ServerViewModel(LLMServerProvider provider)
 {
+    private ModelInfo? _startedModel;
+
     public LLMServerProvider Provider { get; } = provider;
     public string Name => Provider.Name;
     public string Address => Provider.Address;
+    public ModelFormat SupportedModelFormat => Provider.SupportedModelFormat;
     public string? CurrentModel { get; private set; }
+    public ModelInfo? StartedModel => _startedModel;
+    public ServerRuntimeParameters? RuntimeParameters { get; private set; }
     public bool IsRunning { get; private set; }
     public bool IsModelLoaded => !string.IsNullOrWhiteSpace(CurrentModel);
     public bool IsManagedProcessRunning => Provider.IsManagedProcessRunning;
@@ -412,10 +418,29 @@ public sealed class ServerViewModel(LLMServerProvider provider)
 
     public bool Supports(ModelInfo model) => Provider.Supports(model);
 
+    public void SetStartedModel(ModelInfo model) => _startedModel = model;
+
     public async Task RefreshAsync()
     {
         var status = await Provider.GetStatusAsync();
         IsRunning = status.IsRunning;
         CurrentModel = status.CurrentModel;
+        RuntimeParameters = status.RuntimeParameters;
+
+        if (!IsRunning || string.IsNullOrWhiteSpace(CurrentModel) ||
+            (_startedModel is not null && !MatchesModel(CurrentModel, _startedModel)))
+        {
+            _startedModel = null;
+        }
+    }
+
+    private static bool MatchesModel(string currentModel, ModelInfo model)
+    {
+        var currentModelName = Path.GetFileNameWithoutExtension(currentModel);
+        var modelFileName = Path.GetFileNameWithoutExtension(model.Path);
+        return string.Equals(currentModel, model.Path, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(currentModel, model.Name, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(currentModelName, model.Name, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(currentModelName, modelFileName, StringComparison.OrdinalIgnoreCase);
     }
 }

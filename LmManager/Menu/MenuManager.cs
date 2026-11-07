@@ -1,9 +1,11 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Input.Platform;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Input.Platform;
 using LmManager.Models;
+using LmManager.Utilities;
 using LmManager.ViewModels;
+using System.Diagnostics;
 
 namespace LmManager.Menu;
 
@@ -17,6 +19,11 @@ public sealed class MenuManager(
     private readonly Dictionary<string, NativeMenu> _serverModelMenus = new();
     private readonly Dictionary<string, NativeMenuItem> _serverModelStatusItems = new();
     private readonly Dictionary<string, NativeMenuItem> _serverStopItems = new();
+    private NativeMenuItem? _currentStatusAddressItem;
+    private NativeMenuItem? _currentStatusModelItem;
+    private NativeMenuItem? _currentStatusParametersItem;
+    private NativeMenuItem? _currentStatusMessageItem;
+    private readonly List<NativeMenuItem> _llamaCppUrlItems = [];
     private bool _built;
 
     public void Build()
@@ -40,8 +47,34 @@ public sealed class MenuManager(
         if (!_built)
             return;
 
-        _topItems[MenuKeys.Title].Header = $"{MenuText.TitlePrefix}{MenuText.StatusSeparator}{viewModel.StatusMessage}";
+        _topItems[MenuKeys.Title].Header = $"{MenuText.TitlePrefix}";
         _topItems[MenuKeys.Models].Header = $"{MenuText.ModelsFolderPrefix}: {viewModel.ModelsDirectory}";
+
+        var addresses = viewModel.Servers
+            .Where(server => server.IsRunning)
+            .Select(server => server.Address)
+            .Distinct()
+            .ToArray();
+        _currentStatusAddressItem!.Header = $"{MenuText.ServerAddressLabel}: {FormatStatusValue(addresses)}";
+        _currentStatusAddressItem.IsEnabled = addresses.Length > 0;
+
+        var models = viewModel.Servers
+            .Where(server => server.IsRunning && !string.IsNullOrWhiteSpace(server.CurrentModel))
+            .Select(FormatCurrentModel)
+            .Distinct()
+            .ToArray();
+        _currentStatusModelItem!.Header = $"{MenuText.ModelLabel}: {FormatStatusValue(models)}";
+        _currentStatusModelItem.IsEnabled = models.Length > 0;
+
+        var modelParameters = GetRunningModelParameters().ToArray();
+        _currentStatusParametersItem!.Header =
+            $"{MenuText.ModelParametersLabel}: {FormatModelParameters(modelParameters)}";
+        _currentStatusParametersItem.IsEnabled = modelParameters.Length > 0;
+
+        _currentStatusMessageItem!.Header = $"{MenuText.StatusMessageLabel}: {viewModel.StatusMessage}";
+        var canOpenLlamaCppUrls = GetLlamaCppServer()?.IsRunning == true;
+        foreach (var item in _llamaCppUrlItems)
+            item.IsEnabled = canOpenLlamaCppUrls;
 
         foreach (var server in viewModel.Servers)
         {
@@ -50,7 +83,7 @@ public sealed class MenuManager(
 
             var modelStatus = _serverModelStatusItems[server.Name];
             modelStatus.IsVisible = !string.IsNullOrWhiteSpace(server.CurrentModel);
-            modelStatus.Header = $"{MenuText.ModelLabel}: {server.CurrentModel}";
+            modelStatus.Header = $"{MenuText.ModelLabel}: {FormatCurrentModel(server)}";
 
             var stopItem = _serverStopItems[server.Name];
             stopItem.Header = server.IsManagedProcessRunning
@@ -88,8 +121,30 @@ public sealed class MenuManager(
         modelsItem.Menu = modelsMenu;
         _topItems[MenuKeys.Models] = modelsItem;
 
+        var currentStatusItem = new NativeMenuItem
+        {
+            Header = MenuText.CurrentStatus,
+            Icon = GetIcon(MenuIcons.Info_Icon)
+        };
+        var currentStatusMenu = new NativeMenu();
+        _currentStatusAddressItem = CreateCopyStatusItem(() => GetRunningServerAddresses());
+        _currentStatusModelItem = CreateCopyStatusItem(() => GetRunningModelNames());
+        _currentStatusParametersItem = CreateCopyStatusItem(GetRunningModelParametersForClipboard);
+        _currentStatusMessageItem = CreateCopyStatusItem(() => viewModel.StatusMessage);
+        currentStatusMenu.Items.Add(_currentStatusAddressItem);
+        currentStatusMenu.Items.Add(_currentStatusModelItem);
+        currentStatusMenu.Items.Add(_currentStatusParametersItem);
+        currentStatusMenu.Items.Add(_currentStatusMessageItem);
+        currentStatusMenu.Items.Add(new NativeMenuItemSeparator());
+        currentStatusMenu.Items.Add(CreateLlamaCppUrlItem(MenuText.OpenServer, "/"));
+        currentStatusMenu.Items.Add(CreateLlamaCppUrlItem(MenuText.OpenModel, "/v1/models"));
+        currentStatusMenu.Items.Add(CreateLlamaCppUrlItem(MenuText.OpenParams, "/props"));
+        currentStatusItem.Menu = currentStatusMenu;
+        _topItems[MenuKeys.CurrentStatus] = currentStatusItem;
+
         rootMenu.Items.Add(title);
         rootMenu.Items.Add(modelsItem);
+        rootMenu.Items.Add(currentStatusItem);
         rootMenu.Items.Add(new NativeMenuItemSeparator());
 
         foreach (var server in viewModel.Servers)
@@ -117,9 +172,157 @@ public sealed class MenuManager(
         _serverModelMenus.Clear();
         _serverModelStatusItems.Clear();
         _serverStopItems.Clear();
+        _currentStatusAddressItem = null;
+        _currentStatusModelItem = null;
+        _currentStatusParametersItem = null;
+        _currentStatusMessageItem = null;
+        _llamaCppUrlItems.Clear();
         CreateTopLevelItems();
         Refresh();
     }
+
+    private ServerViewModel? GetLlamaCppServer() =>
+        viewModel.Servers.FirstOrDefault(server =>
+            string.Equals(server.Name, "llama.cpp", StringComparison.Ordinal));
+
+    private NativeMenuItem CreateLlamaCppUrlItem(string header, string path)
+    {
+        var item = new NativeMenuItem { Header = header };
+        item.Click += (_, _) => OpenLlamaCppUrl(path);
+        _llamaCppUrlItems.Add(item);
+        return item;
+    }
+
+    private void OpenLlamaCppUrl(string path)
+    {
+        var server = GetLlamaCppServer();
+        if (server is null || !server.IsRunning)
+            return;
+
+        if (!Uri.TryCreate(server.Address, UriKind.Absolute, out var serverUri) ||
+            (serverUri.Scheme != Uri.UriSchemeHttp && serverUri.Scheme != Uri.UriSchemeHttps) ||
+            !Uri.TryCreate(serverUri, path, out var targetUri))
+        {
+            viewModel.ReportError(
+                $"Could not open the {server.Name} page: invalid server address.",
+                new InvalidOperationException($"Invalid server address '{server.Address}'."));
+            return;
+        }
+
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo(targetUri.AbsoluteUri)
+            {
+                UseShellExecute = true
+            });
+
+            if (process is null)
+            {
+                viewModel.ReportError(
+                    $"Could not open the {server.Name} page.",
+                    new InvalidOperationException("Starting the default browser returned no process."));
+                return;
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or ArgumentException or NotSupportedException)
+        {
+            viewModel.ReportError($"Could not open the {server.Name} page.", ex);
+        }
+    }
+
+    private NativeMenuItem CreateCopyStatusItem(Func<string> getValue)
+    {
+        var item = new NativeMenuItem
+        {
+            Header = "",
+            Icon = GetIcon(MenuIcons.Copy_Icon)
+        };
+        item.Click += async (_, _) => await CopyTextToClipboardAsync(getValue());
+        return item;
+    }
+
+    private string GetRunningServerAddresses() =>
+        string.Join(Environment.NewLine, viewModel.Servers
+            .Where(server => server.IsRunning)
+            .Select(server => server.Address)
+            .Distinct());
+
+    private string GetRunningModelNames() =>
+        string.Join(Environment.NewLine, viewModel.Servers
+            .Where(server => server.IsRunning && !string.IsNullOrWhiteSpace(server.CurrentModel))
+            .Select(FormatCurrentModel)
+            .Distinct());
+
+    private IEnumerable<(ServerViewModel Server, int? ContextSize, double? Temperature)> GetRunningModelParameters() =>
+        viewModel.Servers
+            .Where(server => server.IsRunning &&
+                (server.StartedModel is not null || server.RuntimeParameters?.HasValues == true))
+            .Select(server =>
+            {
+                var contextSize = server.RuntimeParameters?.ContextSize ?? server.StartedModel?.ContextSize;
+                var temperature = server.RuntimeParameters?.Temperature ?? server.StartedModel?.Temperature;
+                return (Server: server, ContextSize: contextSize, Temperature: temperature);
+            });
+
+    private string GetRunningModelParametersForClipboard() =>
+        string.Join(Environment.NewLine, GetRunningModelParameters()
+            .Select(entry =>
+                $"{FormatCurrentModel(entry.Server)}{Environment.NewLine}" +
+                $"{MenuText.ContextSizePrefix}: {FormatExactValue(entry.ContextSize)}{Environment.NewLine}" +
+                $"{MenuText.TemperaturePrefix}: {FormatTemperature(entry.Temperature)}"));
+
+    private string FormatModelParameters(
+        IReadOnlyCollection<(ServerViewModel Server, int? ContextSize, double? Temperature)> modelParameters) =>
+        modelParameters.Count == 0
+            ? MenuText.ValueUnavailable
+            : string.Join(", ", modelParameters.Select(entry =>
+                $"ctx={FormatContextSize(entry.ContextSize)}, " +
+                $"temp={FormatTemperature(entry.Temperature)}"));
+
+    private static string FormatContextSize(int? value) =>
+        value is int contextSize
+            ? FormatUtilities.FormatContextSize(contextSize)
+            : MenuText.ValueUnavailable;
+
+    private static string FormatExactValue(int? value) =>
+        value?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? MenuText.ValueUnavailable;
+
+    private static string FormatTemperature(double? value) =>
+        value?.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) ?? MenuText.ValueUnavailable;
+
+    private string FormatCurrentModel(ServerViewModel server)
+    {
+        var currentModel = server.CurrentModel!;
+        var knownModel = server.StartedModel ?? FindCurrentModel(server);
+        var modelName = knownModel?.Name ?? GetModelName(currentModel, server.SupportedModelFormat);
+        var modelFormat = knownModel?.Format ?? server.SupportedModelFormat;
+        return $"{modelName} ({ModelInfo.GetFormatLabel(modelFormat)})";
+    }
+
+    private ModelInfo? FindCurrentModel(ServerViewModel server)
+    {
+        var currentModel = server.CurrentModel;
+        if (string.IsNullOrWhiteSpace(currentModel))
+            return null;
+
+        var modelName = GetModelName(currentModel, server.SupportedModelFormat);
+        return viewModel.Models.FirstOrDefault(model =>
+            string.Equals(model.Path, currentModel, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(model.Name, currentModel, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(model.Name, modelName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string GetModelName(string modelId, ModelFormat format)
+    {
+        if (string.IsNullOrWhiteSpace(modelId))
+            return MenuText.ValueUnavailable;
+
+        // Assume it's a file name or path
+        return Path.GetFileNameWithoutExtension(modelId);
+    }
+
+    private static string FormatStatusValue(IReadOnlyCollection<string> values) =>
+        values.Count == 0 ? MenuText.ValueUnavailable : string.Join(", ", values);
 
     private void CreateServersMenu(ServerViewModel server)
     {
@@ -179,9 +382,9 @@ public sealed class MenuManager(
 
             if (model.Format == ModelFormat.Gguf)
                 modelOptionsMenu.Items.Add(CreateOptionsMenu(
-                    $"{MenuText.ContextSizePrefix}: {model.ContextSize / 1000:N0}k",
+                    $"{MenuText.ContextSizePrefix}: {FormatUtilities.FormatContextSize(model.ContextSize)}",
                     model.ContextSize,
-                    model.ContextSizeOptions.Select(size => (size, $"{size / 1000:N0}k tokens")),
+                    model.ContextSizeOptions.Select(size => (size, $"{FormatUtilities.FormatContextSize(size)} tokens")),
                     value => viewModel.SetModelContextSize(model, value)));
 
             modelOptionsMenu.Items.Add(CreateAction(
@@ -190,7 +393,6 @@ public sealed class MenuManager(
                 async () => await viewModel.StartModelAsync(server, model)));
 
             item.Menu = modelOptionsMenu;
-            item.ToolTip = model.Path;
             modelMenu.Items.Add(item);
         }
     }

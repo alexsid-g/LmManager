@@ -9,6 +9,7 @@ public static class MenuKeys
 {
     public const string Title = "title";
     public const string Models = "models";
+    public const string CurrentStatus = "currentStatus";
     public const string ShowLog = "showLog";
     public const string Quit = "quit";
 

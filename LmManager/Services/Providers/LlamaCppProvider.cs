@@ -13,9 +13,11 @@ public sealed class LlamaCppProvider : LLMServerProvider
 
     public override string Name => "llama.cpp";
     public override string Address => $"http://{_settings.LlamaHost}:{_settings.LlamaPort}";
+    public override ModelFormat SupportedModelFormat => ModelFormat.Gguf;
     protected override string Executable => _settings.LlamaExecutable;
     protected override string ExecutableName => "llama-server";
     protected override string ModelsEndpoint => "/v1/models";
+    protected override string? RuntimeParametersEndpoint => "/props";
     protected override string? HealthEndpoint => "/health";
     protected override string[] ValidationArguments => ["--version"];
     public override bool Supports(ModelInfo model) => model.Format == ModelFormat.Gguf;

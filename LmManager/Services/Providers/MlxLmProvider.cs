@@ -20,6 +20,7 @@ public class MlxLmProvider : LLMServerProvider
 
     public override string Name => ProviderName;
     public override string Address => $"http://{Host}:{Port}";
+    public override ModelFormat SupportedModelFormat => ModelFormat.Mlx;
     protected override string Executable => ServerExecutable;
     protected override string ExecutableName => ServerExecutableName;
     protected override string ModelsEndpoint => "/v1/models";
