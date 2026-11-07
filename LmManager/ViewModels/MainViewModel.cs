@@ -243,7 +243,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 StateChanged?.Invoke();
             }
         }
-        catch (Exception ex) when (ex is InvalidOperationException or IOException or System.ComponentModel.Win32Exception)
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or System.Text.Json.JsonException or System.ComponentModel.Win32Exception)
         {
             StatusMessage = $"Could not start {server.Name}: {ex.Message}";
             HasError = true;

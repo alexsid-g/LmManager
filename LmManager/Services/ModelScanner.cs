@@ -5,14 +5,6 @@ namespace LmManager.Services;
 
 public sealed class ModelScanner
 {
-    private const string StartupParametersFileName = "startup-params.json";
-    private readonly ParametersProvider _parametersProvider;
-
-    public ModelScanner(ParametersProvider? parametersProvider = null)
-    {
-        _parametersProvider = parametersProvider ?? new ParametersProvider();
-    }
-
     public ModelScanResult Scan(string rootPath)
     {
         if (!Directory.Exists(rootPath))
@@ -38,11 +30,9 @@ public sealed class ModelScanner
                 continue;
             }
 
-            var startupParametersFile = files.FirstOrDefault(file =>
-                Path.GetFileName(file).Equals(StartupParametersFileName, StringComparison.OrdinalIgnoreCase));
-            models.AddRange(FindGgufModels(files, startupParametersFile, errors));
+            models.AddRange(FindGgufModels(files, errors));
 
-            var mlxModel = FindMlxModel(directory, files, startupParametersFile, errors);
+            var mlxModel = FindMlxModel(directory, files, errors);
             if (mlxModel is not null)
                 models.Add(mlxModel);
 
@@ -63,10 +53,7 @@ public sealed class ModelScanner
         return new ModelScanResult(models.OrderBy(model => model.Name, StringComparer.OrdinalIgnoreCase).ToArray(), errors);
     }
 
-    private IEnumerable<ModelInfo> FindGgufModels(
-        string[] files,
-        string? startupParametersFile,
-        ICollection<string> errors)
+    private static IEnumerable<ModelInfo> FindGgufModels(string[] files, ICollection<string> errors)
     {
         var validGgufFiles = new List<string>();
         foreach (var file in files.Where(file =>
@@ -101,7 +88,7 @@ public sealed class ModelScanner
                     GetFileSize(file),
                     mmprojFileName)
                 {
-                    StartupParameters = LoadStartupParameters(startupParametersFile, Path.GetFileNameWithoutExtension(file), errors)
+                    HasParamsFiles = ParametersProvider.HasParamsFile(Path.GetDirectoryName(file)!)
                 };
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -117,11 +104,7 @@ public sealed class ModelScanner
     private static bool IsMmprojFile(string filePath) =>
         Path.GetFileName(filePath).StartsWith("mmproj-", StringComparison.OrdinalIgnoreCase);
 
-    private ModelInfo? FindMlxModel(
-        string directory,
-        string[] files,
-        string? startupParametersFile,
-        ICollection<string> errors)
+    private static ModelInfo? FindMlxModel(string directory, string[] files, ICollection<string> errors)
     {
         if (!files.Any(file => Path.GetFileName(file)
             .Equals("config.json", StringComparison.OrdinalIgnoreCase)))
@@ -153,27 +136,8 @@ public sealed class ModelScanner
         var name = new DirectoryInfo(directory).Name;
         return new ModelInfo(name, directory, ModelFormat.Mlx, GetDirectorySize(directory, errors))
         {
-            StartupParameters = LoadStartupParameters(startupParametersFile, name, errors)
+            HasParamsFiles = ParametersProvider.HasParamsFile(directory)
         };
-    }
-
-    private string[] LoadStartupParameters(
-        string? startupParametersFile,
-        string modelName,
-        ICollection<string> errors)
-    {
-        if (startupParametersFile is null)
-            return [];
-
-        try
-        {
-            return _parametersProvider.LoadParameters(startupParametersFile, modelName);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
-        {
-            errors.Add($"{startupParametersFile}: {ex.Message}");
-            return [];
-        }
     }
 
     private static bool IsGguf(string filePath)

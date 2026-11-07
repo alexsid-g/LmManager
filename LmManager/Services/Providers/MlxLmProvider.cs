@@ -4,6 +4,10 @@ namespace LmManager.Services;
 
 public class MlxLmProvider : LLMServerProvider
 {
+    private static readonly HashSet<string> ParamsBlacklist = new(
+        ["--model", "--host", "--port"],
+        StringComparer.OrdinalIgnoreCase);
+
     protected readonly AppSettings Settings;
 
     public MlxLmProvider(AppSettings settings, Action<string>? logOutput = null)
@@ -26,12 +30,16 @@ public class MlxLmProvider : LLMServerProvider
     protected override string ModelsEndpoint => "/v1/models";
     protected override string? HealthEndpoint => null;
     public override bool Supports(ModelInfo model) => model.Format == ModelFormat.Mlx;
-    protected override string[] BuildArguments(ModelInfo model) =>
-        [
-            "--model", model.Path,
-            "--temp", model.Temperature.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            "--host", Host,
-            "--port", Port.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            .. model.StartupParameters
-        ];
+    protected override string[] BuildArguments(ModelInfo model)
+    {
+        Dictionary<string, string> args = new()
+        {
+            { "--model", model.Path },
+            { "--host", Host },
+            { "--port", Port.ToString(System.Globalization.CultureInfo.InvariantCulture)},
+        };
+
+        return LoadStartupParametersAndMerge(model, args, ParamsBlacklist);
+    }
+        
 }

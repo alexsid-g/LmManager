@@ -386,7 +386,7 @@ public sealed class MenuManager(
 
         foreach (var model in compatibleModels)
         {
-            var item = new NativeMenuItem { Header = model.DisplayName };
+            var item = new NativeMenuItem { Header = model.GetDisplayName() };
             var modelOptionsMenu = new NativeMenu();
             modelOptionsMenu.Items.Add(CreateOptionsMenu(
                 $"{MenuText.TemperaturePrefix}: {model.Temperature:0.0}",
@@ -431,7 +431,7 @@ public sealed class MenuManager(
         {
             modelsMenu.Items.Add(new NativeMenuItem
             {
-                Header = model.DisplayName,
+                Header = model.GetDisplayName(),
                 IsEnabled = false
             });
         }

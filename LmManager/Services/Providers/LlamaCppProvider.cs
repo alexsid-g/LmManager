@@ -4,7 +4,12 @@ namespace LmManager.Services;
 
 public sealed class LlamaCppProvider : LLMServerProvider
 {
+    private static readonly HashSet<string> ParamsBlacklist = new(
+        ["-m", "--model", "-mu", "--model-url", "--temp", "--host", "--port", "--mmproj"],
+        StringComparer.OrdinalIgnoreCase); 
+
     private readonly AppSettings _settings;
+
     public LlamaCppProvider(AppSettings settings, Action<string>? logOutput = null)
         : base(logOutput)
     {
@@ -23,22 +28,23 @@ public sealed class LlamaCppProvider : LLMServerProvider
     public override bool Supports(ModelInfo model) => model.Format == ModelFormat.Gguf;
     protected override string[] BuildArguments(ModelInfo model)
     {
-        var arguments = new List<string> { "-m", model.Path };
-        arguments.AddRange([
-            "--ctx-size", model.ContextSize.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            "--temp", model.Temperature.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            "--host", _settings.LlamaHost,
-            "--port", _settings.LlamaPort.ToString(System.Globalization.CultureInfo.InvariantCulture)
-        ]);
+        var args = new Dictionary<string, string>
+        { 
+            { "-m", model.Path },
+            { "--ctx-size", model.ContextSize.ToString(System.Globalization.CultureInfo.InvariantCulture) },
+            { "--temp", model.Temperature.ToString(System.Globalization.CultureInfo.InvariantCulture) },
+            { "--host", _settings.LlamaHost },
+            { "--port", _settings.LlamaPort.ToString(System.Globalization.CultureInfo.InvariantCulture) },
+        };
 
         if (model.HasMmproj && model.MmprojFileName is { } mmprojFileName)
         {
             var modelDirectory = Path.GetDirectoryName(model.Path) ?? ".";
-            arguments.AddRange(["--mmproj", Path.Combine(modelDirectory, mmprojFileName)]);
-            arguments.AddRange(["--image-min-tokens", "2048"]);
+            args.Add("--mmproj", Path.Combine(modelDirectory, mmprojFileName));
+            args.Add("--image-min-tokens", "1024");
+            args.Add("--image-max-tokens", "2048");
         }
-        
-        arguments.AddRange(model.StartupParameters);
-        return arguments.ToArray();
+
+        return LoadStartupParametersAndMerge(model, args, ParamsBlacklist);
     }
 }

@@ -29,10 +29,13 @@ public sealed record ModelInfo(
 
     public int ContextSize { get; init; } = DefaultContextSize;
     public double Temperature { get; init; } = DefaultTemperature;
-    public IReadOnlyList<string> StartupParameters { get; init; } = [];
+    public bool HasParamsFiles { get; init; }
     public bool HasMmproj => !string.IsNullOrWhiteSpace(MmprojFileName);
 
-    public string DisplayName => $"{Name} ({GetFormatLabel(Format)})";
+    public string DisplayName => GetDisplayName();
+
+    public string GetDisplayName() =>
+        $"{Name} ({GetFormatLabel(Format)}){(HasParamsFiles ? "*" : string.Empty)}";
 
     public static bool IsSupportedTemperature(double temperature) =>
         TemperatureOptions.Any(option => option.Value == temperature);

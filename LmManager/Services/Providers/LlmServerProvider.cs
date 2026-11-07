@@ -9,6 +9,7 @@ namespace LmManager.Services;
 public abstract class LLMServerProvider : IDisposable
 {
     private static readonly HttpClient HttpClient = new();
+    private readonly ParametersProvider _parametersProvider = new();
     private readonly Action<string>? _logOutput;
     private Process? _managedProcess;
 
@@ -35,6 +36,19 @@ public abstract class LLMServerProvider : IDisposable
     public bool IsManagedProcessRunning => _managedProcess is { HasExited: false };
     public abstract bool Supports(ModelInfo model);
     protected abstract string[] BuildArguments(ModelInfo model);
+
+    protected string[] LoadStartupParametersAndMerge(
+        ModelInfo model, Dictionary<string, string> args, HashSet<string> paramsBlacklist)
+    {
+        foreach (var item in _parametersProvider.LoadParameters(model))
+        {
+            if (paramsBlacklist.Contains(item.Key)) continue;
+
+            args[item.Key] = item.Value;
+        }
+
+        return args.SelectMany(x => new[] { x.Key, x.Value }).ToArray();
+    }
 
     public async Task<ServerStatus> GetStatusAsync()
     {
@@ -173,6 +187,7 @@ public abstract class LLMServerProvider : IDisposable
                 $"Could not find an executable file for '{Executable}'. Check that it exists, is executable, and is available in PATH.");
         await ValidateExecutableAsync(resolvedExecutable);
 
+        var arguments = BuildArguments(model);
         if (_managedProcess is { HasExited: false })
         {
             await StopAsync();
@@ -187,7 +202,7 @@ public abstract class LLMServerProvider : IDisposable
             RedirectStandardError = true,
             CreateNoWindow = true
         };
-        foreach (var argument in BuildArguments(model))
+        foreach (var argument in arguments)
             startInfo.ArgumentList.Add(argument);
 
         _logOutput?.Invoke(
