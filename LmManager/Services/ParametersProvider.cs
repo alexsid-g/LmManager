@@ -62,9 +62,15 @@ public sealed class ParametersProvider
             var paramName = $"--{parameter.Name}";
             if (!arguments.ContainsKey(paramName))
             {
-                arguments.Add(paramName, parameter.Value.ValueKind == JsonValueKind.String
-                    ? parameter.Value.GetString()!
-                    : parameter.Value.ToString());   
+                var paramValue = parameter.Value.ValueKind switch
+                {
+                    JsonValueKind.String => parameter.Value.GetString()!,
+                    JsonValueKind.True => "true",
+                    JsonValueKind.False => "false",
+                    _ => parameter.Value.ToString()
+                };
+
+                arguments.Add(paramName, paramValue);
             }
         }
 

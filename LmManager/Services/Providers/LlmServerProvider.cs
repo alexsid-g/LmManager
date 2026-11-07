@@ -47,18 +47,21 @@ public abstract class LLMServerProvider : IDisposable
             args[item.Key] = item.Value;
         }
 
-        return args.SelectMany(x => new[] { x.Key, x.Value }).ToArray();
+        return args
+            .SelectMany(x => string.IsNullOrWhiteSpace(x.Value)
+                ? new[] { x.Key }
+                : new[] { x.Key, x.Value })
+            .ToArray();
     }
 
     public async Task<ServerStatus> GetStatusAsync()
     {
-        _ = GetBaseAddressUri();
-
         // llama.cpp exposes a dedicated /health endpoint: treat "status": "ok" as running.
         if (!string.IsNullOrWhiteSpace(HealthEndpoint))
         {
             if (!await CheckHealthAsync())
                 return new ServerStatus(false);
+
             return new ServerStatus(
                 true,
                 await GetLoadedModelIdAsync(),

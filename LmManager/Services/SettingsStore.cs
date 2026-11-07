@@ -21,29 +21,52 @@ public sealed class SettingsStore
         try
         {
             var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath));
-            return new AppSettings
-            {
-                ModelsDirectory = GetValueOrDefault(settings?.ModelsDirectory, defaults.ModelsDirectory),
-                LogsDirectory = GetValueOrDefault(settings?.LogsDirectory, defaults.LogsDirectory),
-                MlxHost = GetValueOrDefault(settings?.MlxHost, defaults.MlxHost),
-                MlxPort = GetPortOrDefault(settings?.MlxPort, defaults.MlxPort),
-                MlxExecutable = GetValueOrDefault(settings?.MlxExecutable, defaults.MlxExecutable),
-                MlxVlmHost = GetValueOrDefault(settings?.MlxVlmHost, defaults.MlxVlmHost),
-                MlxVlmPort = GetPortOrDefault(settings?.MlxVlmPort, defaults.MlxVlmPort),
-                MlxVlmExecutable = GetValueOrDefault(settings?.MlxVlmExecutable, defaults.MlxVlmExecutable),
-                LlamaHost = GetValueOrDefault(settings?.LlamaHost, defaults.LlamaHost),
-                LlamaPort = GetPortOrDefault(settings?.LlamaPort, defaults.LlamaPort),
-                LlamaExecutable = GetValueOrDefault(settings?.LlamaExecutable, defaults.LlamaExecutable),
-                ModelContextSizes = GetContextSizesOrDefault(settings?.ModelContextSizes),
-                ModelTemperatures = GetTemperaturesOrDefault(settings?.ModelTemperatures),
-                ModelReasonings = GetReasoningsOrDefault(settings?.ModelReasonings)
-            };
+            return settings is null ? defaults : CreateSettings(settings, defaults);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            var backupPath = GetBackupPath();
+            if (File.Exists(backupPath))
+            {
+                try
+                {
+                    var backupSettings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(backupPath));
+                    if (backupSettings is not null)
+                    {
+                        Console.Error.WriteLine(
+                            $"Could not read settings from '{SettingsPath}' ({ex.Message}). Falling back to backup '{backupPath}'.");
+                        return CreateSettings(backupSettings, defaults);
+                    }
+                }
+                catch (Exception backupEx)
+                {
+                    Console.Error.WriteLine(
+                        $"Could not read settings backup '{backupPath}' ({backupEx.Message}). Using defaults.");
+                }
+            }
+
+            Console.Error.WriteLine($"Could not read settings from '{SettingsPath}' ({ex.Message}). Using defaults.");
             return defaults;
         }
     }
+
+    private static AppSettings CreateSettings(AppSettings? source, AppSettings defaults) => new()
+    {
+        ModelsDirectory = GetValueOrDefault(source?.ModelsDirectory, defaults.ModelsDirectory),
+        LogsDirectory = GetValueOrDefault(source?.LogsDirectory, defaults.LogsDirectory),
+        MlxHost = GetValueOrDefault(source?.MlxHost, defaults.MlxHost),
+        MlxPort = GetPortOrDefault(source?.MlxPort, defaults.MlxPort),
+        MlxExecutable = GetValueOrDefault(source?.MlxExecutable, defaults.MlxExecutable),
+        MlxVlmHost = GetValueOrDefault(source?.MlxVlmHost, defaults.MlxVlmHost),
+        MlxVlmPort = GetPortOrDefault(source?.MlxVlmPort, defaults.MlxVlmPort),
+        MlxVlmExecutable = GetValueOrDefault(source?.MlxVlmExecutable, defaults.MlxVlmExecutable),
+        LlamaHost = GetValueOrDefault(source?.LlamaHost, defaults.LlamaHost),
+        LlamaPort = GetPortOrDefault(source?.LlamaPort, defaults.LlamaPort),
+        LlamaExecutable = GetValueOrDefault(source?.LlamaExecutable, defaults.LlamaExecutable),
+        ModelContextSizes = GetContextSizesOrDefault(source?.ModelContextSizes),
+        ModelTemperatures = GetTemperaturesOrDefault(source?.ModelTemperatures),
+        ModelReasonings = GetReasoningsOrDefault(source?.ModelReasonings)
+    };
 
     private static string GetValueOrDefault(string? value, string defaultValue) =>
         string.IsNullOrWhiteSpace(value) ? defaultValue : value;
@@ -80,8 +103,13 @@ public sealed class SettingsStore
         var directory = Path.GetDirectoryName(SettingsPath)!;
         Directory.CreateDirectory(directory);
 
+        if (File.Exists(SettingsPath))
+            File.Copy(SettingsPath, GetBackupPath(), overwrite: true);
+
         var temporaryPath = $"{SettingsPath}.tmp";
         File.WriteAllText(temporaryPath, JsonSerializer.Serialize(settings, JsonOptions));
         File.Move(temporaryPath, SettingsPath, overwrite: true);
     }
+
+    private string GetBackupPath() => $"{SettingsPath}.bak";
 }

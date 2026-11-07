@@ -49,7 +49,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
             Dispatcher.UIThread.Post(() =>
             {
                 StatusMessage = message;
-                HasError = true;
                 StateChanged?.Invoke();
             });
         });
@@ -136,7 +135,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             {
                 Models.Clear();
                 StatusMessage = $"Models folder not found: {ModelsDirectory}. Choose a folder from the menu.";
-                HasError = true;
+                HasError = false;
                 _logger.Write(StatusMessage);
                 StateChanged?.Invoke();
                 return;
@@ -170,7 +169,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             StatusMessage = result.Errors.Count == 0
                 ? $"Models found: {Models.Count}"
                 : $"Models found: {Models.Count}; inaccessible items skipped: {result.Errors.Count}";
-            HasError = result.Errors.Count > 0;
+            HasError = false;
             _logger.Write($"Scan completed: found {Models.Count} models in {ModelsDirectory}.");
             foreach (var error in result.Errors)
                 _logger.Write($"Scan error: {error}");
@@ -249,6 +248,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
             {
                 HasError = false;
                 StatusMessage = $"Loaded model {model.Name} on {server.Name}.";
+                StateChanged?.Invoke();
+            }
+            else
+            {
+                HasError = false;
+                StatusMessage = $"Started model {model.Name} on {server.Name}. Load confirmation timed out; the model may still be starting.";
+                _logger.Write(StatusMessage);
                 StateChanged?.Invoke();
             }
         }
@@ -420,9 +426,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
         ServerViewModel server,
         Func<ServerViewModel, bool> isDesiredState)
     {
-        for (var i = 1; i <= 3; i++)
+        var waitDelays = new[] 
         {
-            await Task.Delay(TimeSpan.FromSeconds(i));
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromSeconds(2),
+            TimeSpan.FromSeconds(3),
+        };
+
+        foreach (var delay in waitDelays)
+        {
+            await Task.Delay(delay);
             await server.RefreshAsync();
 
             StateChanged?.Invoke();
