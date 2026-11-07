@@ -24,19 +24,21 @@ public sealed class LlamaCppProvider : LLMServerProvider
     protected override string[] BuildArguments(ModelInfo model)
     {
         var arguments = new List<string> { "-m", model.Path };
-        if (model.HasMmproj && model.MmprojFileName is { } mmprojFileName)
-        {
-            var modelDirectory = Path.GetDirectoryName(model.Path) ?? ".";
-            arguments.AddRange(["--mmproj", Path.Combine(modelDirectory, mmprojFileName)]);
-            arguments.AddRange(["--image-min-tokens", "2048"]);
-        }
-
         arguments.AddRange([
             "--ctx-size", model.ContextSize.ToString(System.Globalization.CultureInfo.InvariantCulture),
             "--temp", model.Temperature.ToString(System.Globalization.CultureInfo.InvariantCulture),
             "--host", _settings.LlamaHost,
             "--port", _settings.LlamaPort.ToString(System.Globalization.CultureInfo.InvariantCulture)
         ]);
+
+        if (model.HasMmproj && model.MmprojFileName is { } mmprojFileName)
+        {
+            var modelDirectory = Path.GetDirectoryName(model.Path) ?? ".";
+            arguments.AddRange(["--mmproj", Path.Combine(modelDirectory, mmprojFileName)]);
+            arguments.AddRange(["--image-min-tokens", "2048"]);
+        }
+        
+        arguments.AddRange(model.StartupParameters);
         return arguments.ToArray();
     }
 }

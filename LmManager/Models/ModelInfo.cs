@@ -29,6 +29,7 @@ public sealed record ModelInfo(
 
     public int ContextSize { get; init; } = DefaultContextSize;
     public double Temperature { get; init; } = DefaultTemperature;
+    public IReadOnlyList<string> StartupParameters { get; init; } = [];
     public bool HasMmproj => !string.IsNullOrWhiteSpace(MmprojFileName);
 
     public string DisplayName => $"{Name} ({GetFormatLabel(Format)})";

@@ -21,6 +21,7 @@ public static class MenuText
     public const string ValueUnavailable = "Not available";
     public const string ChooseFolder = "Choose folder...";
     public const string ScanNow = "Scan now";
+    public const string ModelsFound = "Found Models List";
     public const string LoadModel = "Load model";
     public const string NoModels = "Empty";
     public const string ContextSizePrefix = "Context size";

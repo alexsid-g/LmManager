@@ -19,6 +19,8 @@ public sealed class MenuManager(
     private readonly Dictionary<string, NativeMenu> _serverModelMenus = new();
     private readonly Dictionary<string, NativeMenuItem> _serverModelStatusItems = new();
     private readonly Dictionary<string, NativeMenuItem> _serverStopItems = new();
+    private NativeMenu? _foundModelsMenu;
+    private NativeMenuItem? _foundModelsItem;
     private NativeMenuItem? _currentStatusAddressItem;
     private NativeMenuItem? _currentStatusModelItem;
     private NativeMenuItem? _currentStatusParametersItem;
@@ -49,6 +51,7 @@ public sealed class MenuManager(
 
         _topItems[MenuKeys.Title].Header = $"{MenuText.TitlePrefix}";
         _topItems[MenuKeys.Models].Header = $"{MenuText.ModelsFolderPrefix}: {viewModel.ModelsDirectory}";
+        RefreshFoundModelsMenu();
 
         var addresses = viewModel.Servers
             .Where(server => server.IsRunning)
@@ -118,6 +121,15 @@ public sealed class MenuManager(
             MenuText.ScanNow,
             GetIcon(MenuIcons.Search_Icon),
             async () => await viewModel.ScanModelsAsync()));
+        modelsMenu.Items.Add(new NativeMenuItemSeparator());
+
+        var foundModelsMenu = new NativeMenu();
+        _foundModelsItem = new NativeMenuItem { 
+            Menu = foundModelsMenu, 
+            Icon = GetIcon(MenuIcons.Info_Icon),
+        };
+        _foundModelsMenu = foundModelsMenu;
+        modelsMenu.Items.Add(_foundModelsItem);
         modelsItem.Menu = modelsMenu;
         _topItems[MenuKeys.Models] = modelsItem;
 
@@ -172,6 +184,8 @@ public sealed class MenuManager(
         _serverModelMenus.Clear();
         _serverModelStatusItems.Clear();
         _serverStopItems.Clear();
+        _foundModelsMenu = null;
+        _foundModelsItem = null;
         _currentStatusAddressItem = null;
         _currentStatusModelItem = null;
         _currentStatusParametersItem = null;
@@ -394,6 +408,32 @@ public sealed class MenuManager(
 
             item.Menu = modelOptionsMenu;
             modelMenu.Items.Add(item);
+        }
+    }
+
+    private void RefreshFoundModelsMenu()
+    {
+        var modelsMenu = _foundModelsMenu!;
+        _foundModelsItem!.Header = $"{MenuText.ModelsFound} ({viewModel.Models.Count})";
+        modelsMenu.Items.Clear();
+
+        if (viewModel.Models.Count == 0)
+        {
+            modelsMenu.Items.Add(new NativeMenuItem
+            {
+                Header = MenuText.NoModels,
+                IsEnabled = false
+            });
+            return;
+        }
+
+        foreach (var model in viewModel.Models)
+        {
+            modelsMenu.Items.Add(new NativeMenuItem
+            {
+                Header = model.DisplayName,
+                IsEnabled = false
+            });
         }
     }
 

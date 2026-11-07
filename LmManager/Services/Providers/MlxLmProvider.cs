@@ -31,6 +31,7 @@ public class MlxLmProvider : LLMServerProvider
             "--model", model.Path,
             "--temp", model.Temperature.ToString(System.Globalization.CultureInfo.InvariantCulture),
             "--host", Host,
-            "--port", Port.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            "--port", Port.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            .. model.StartupParameters
         ];
 }
