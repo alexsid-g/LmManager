@@ -35,6 +35,7 @@ public class MlxLmProvider : LLMServerProvider
         Dictionary<string, string> args = new()
         {
             { "--model", model.Path },
+            { "--use-default-chat-template", string.Empty },
             { "--host", Host },
             { "--port", Port.ToString(System.Globalization.CultureInfo.InvariantCulture)},
         };

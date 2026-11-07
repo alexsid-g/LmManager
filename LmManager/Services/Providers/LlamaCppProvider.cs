@@ -4,8 +4,40 @@ namespace LmManager.Services;
 
 public sealed class LlamaCppProvider : LLMServerProvider
 {
+    private static readonly Dictionary<ReasoningProfile, Dictionary<string, string>> ReasoningProfiles = new()
+    {
+        [ReasoningProfile.None] = new()
+        {
+            ["--reasoning"] = "off",
+            ["--reasoning-budget"] = "0",
+        },
+
+        // about 2048 * 70% / 500 = 2.86 pages of text
+        [ReasoningProfile.Medium] = new()
+        {
+            ["--reasoning"] = "auto",
+            ["--reasoning-budget"] = "2048",
+        },
+
+        // about 8192 * 70% / 500 = 11.46 pages of text
+        [ReasoningProfile.Maximum] = new()
+        {
+            ["--reasoning"] = "on",
+            ["--reasoning-budget"] = "8192",
+        },
+
+        // all available
+        [ReasoningProfile.Unlim] = new()
+        {
+            ["--reasoning"] = "on",
+        },
+    };
+
     private static readonly HashSet<string> ParamsBlacklist = new(
-        ["-m", "--model", "-mu", "--model-url", "--temp", "--host", "--port", "--mmproj"],
+        [
+            "-m", "--model", "-mu", "--model-url", "--temp", "--host", "--port", "--mmproj",
+            "--reasoning", "--reasoning-budget"
+        ],
         StringComparer.OrdinalIgnoreCase); 
 
     private readonly AppSettings _settings;
@@ -44,6 +76,11 @@ public sealed class LlamaCppProvider : LLMServerProvider
             args.Add("--image-min-tokens", "1024");
             args.Add("--image-max-tokens", "2048");
         }
+
+        if (!ReasoningProfiles.TryGetValue(model.Reasoning, out var reasoning))
+            throw new ArgumentOutOfRangeException(nameof(model), model.Reasoning, "Unsupported reasoning profile.");
+        foreach (var (name, value) in reasoning)
+            args[name] = value;
 
         return LoadStartupParametersAndMerge(model, args, ParamsBlacklist);
     }

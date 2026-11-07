@@ -155,7 +155,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 var temperature = _settings.ModelTemperatures.TryGetValue(modelPath, out var savedTemperature)
                     ? savedTemperature
                     : ModelInfo.DefaultTemperature;
-                Models.Add(model with { Path = modelPath, ContextSize = contextSize, Temperature = temperature });
+                var reasoning = _settings.ModelReasonings.TryGetValue(modelPath, out var savedReasoning)
+                    ? savedReasoning
+                    : ModelInfo.DefaultReasoning;
+                Models.Add(model with
+                {
+                    Path = modelPath,
+                    ContextSize = contextSize,
+                    Temperature = temperature,
+                    Reasoning = reasoning
+                });
             }
 
             StatusMessage = result.Errors.Count == 0
@@ -330,6 +339,45 @@ public partial class MainViewModel : ObservableObject, IDisposable
             else
                 _settings.ModelTemperatures.Remove(modelPath);
             StatusMessage = $"Could not save temperature: {ex.Message}";
+            HasError = true;
+            _logger.Write(StatusMessage);
+        }
+
+        StateChanged?.Invoke();
+    }
+
+    public void SetModelReasoning(ModelInfo model, ReasoningProfile reasoning)
+    {
+        if (!ModelInfo.IsSupportedReasoning(reasoning))
+        {
+            StatusMessage = "Choose one of the available reasoning presets.";
+            HasError = true;
+            StateChanged?.Invoke();
+            return;
+        }
+
+        var modelPath = Path.GetFullPath(model.Path);
+        var hadPreviousReasoning = _settings.ModelReasonings.TryGetValue(modelPath, out var previousReasoning);
+        _settings.ModelReasonings[modelPath] = reasoning;
+
+        try
+        {
+            _settingsStore.Save(_settings);
+            var index = Models.IndexOf(model);
+            if (index >= 0)
+                Models[index] = model with { Reasoning = reasoning };
+
+            StatusMessage = $"Reasoning for {model.Name} set to {reasoning}.";
+            HasError = false;
+            _logger.Write(StatusMessage);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            if (hadPreviousReasoning)
+                _settings.ModelReasonings[modelPath] = previousReasoning;
+            else
+                _settings.ModelReasonings.Remove(modelPath);
+            StatusMessage = $"Could not save reasoning: {ex.Message}";
             HasError = true;
             _logger.Write(StatusMessage);
         }

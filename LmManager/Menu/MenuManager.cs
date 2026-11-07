@@ -267,15 +267,18 @@ public sealed class MenuManager(
             .Select(FormatCurrentModel)
             .Distinct());
 
-    private IEnumerable<(ServerViewModel Server, int? ContextSize, double? Temperature)> GetRunningModelParameters() =>
+    private IEnumerable<(ServerViewModel Server, int? ContextSize, double? Temperature, ReasoningProfile? Reasoning)> GetRunningModelParameters() =>
         viewModel.Servers
             .Where(server => server.IsRunning &&
-                (server.StartedModel is not null || server.RuntimeParameters?.HasValues == true))
+                (server.StartedModel is not null ||
+                 server.RuntimeParameters?.HasValues == true ||
+                 FindCurrentModel(server) is not null))
             .Select(server =>
             {
-                var contextSize = server.RuntimeParameters?.ContextSize ?? server.StartedModel?.ContextSize;
-                var temperature = server.RuntimeParameters?.Temperature ?? server.StartedModel?.Temperature;
-                return (Server: server, ContextSize: contextSize, Temperature: temperature);
+                var model = server.StartedModel ?? FindCurrentModel(server);
+                var contextSize = server.RuntimeParameters?.ContextSize ?? model?.ContextSize;
+                var temperature = server.RuntimeParameters?.Temperature ?? model?.Temperature;
+                return (Server: server, ContextSize: contextSize, Temperature: temperature, Reasoning: model?.Reasoning);
             });
 
     private string GetRunningModelParametersForClipboard() =>
@@ -283,15 +286,17 @@ public sealed class MenuManager(
             .Select(entry =>
                 $"{FormatCurrentModel(entry.Server)}{Environment.NewLine}" +
                 $"{MenuText.ContextSizePrefix}: {FormatExactValue(entry.ContextSize)}{Environment.NewLine}" +
-                $"{MenuText.TemperaturePrefix}: {FormatTemperature(entry.Temperature)}"));
+                $"{MenuText.TemperaturePrefix}: {FormatTemperature(entry.Temperature)}{Environment.NewLine}" +
+                $"{MenuText.ReasoningPrefix}: {FormatReasoning(entry.Reasoning)}"));
 
     private string FormatModelParameters(
-        IReadOnlyCollection<(ServerViewModel Server, int? ContextSize, double? Temperature)> modelParameters) =>
+        IReadOnlyCollection<(ServerViewModel Server, int? ContextSize, double? Temperature, ReasoningProfile? Reasoning)> modelParameters) =>
         modelParameters.Count == 0
             ? MenuText.ValueUnavailable
             : string.Join(", ", modelParameters.Select(entry =>
                 $"ctx={FormatContextSize(entry.ContextSize)}, " +
-                $"temp={FormatTemperature(entry.Temperature)}"));
+                $"temp={FormatTemperature(entry.Temperature)}, " +
+                $"reasoning={FormatReasoning(entry.Reasoning)}"));
 
     private static string FormatContextSize(int? value) =>
         value is int contextSize
@@ -304,13 +309,16 @@ public sealed class MenuManager(
     private static string FormatTemperature(double? value) =>
         value?.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) ?? MenuText.ValueUnavailable;
 
+    private static string FormatReasoning(ReasoningProfile? value) =>
+        value?.ToString() ?? MenuText.ValueUnavailable;
+
     private string FormatCurrentModel(ServerViewModel server)
     {
         var currentModel = server.CurrentModel!;
         var knownModel = server.StartedModel ?? FindCurrentModel(server);
-        var modelName = knownModel?.Name ?? GetModelName(currentModel, server.SupportedModelFormat);
-        var modelFormat = knownModel?.Format ?? server.SupportedModelFormat;
-        return $"{modelName} ({ModelInfo.GetFormatLabel(modelFormat)})";
+        return knownModel?.GetDisplayName() ??
+            $"{GetModelName(currentModel, server.SupportedModelFormat)} " +
+            $"({ModelInfo.GetFormatLabel(server.SupportedModelFormat)})";
     }
 
     private ModelInfo? FindCurrentModel(ServerViewModel server)
@@ -395,11 +403,19 @@ public sealed class MenuManager(
                 value => viewModel.SetModelTemperature(model, value)));
 
             if (model.Format == ModelFormat.Gguf)
+            {
+                modelOptionsMenu.Items.Add(CreateOptionsMenu(
+                    $"{MenuText.ReasoningPrefix}: {model.Reasoning}",
+                    model.Reasoning,
+                    ModelInfo.ReasoningOptions,
+                    value => viewModel.SetModelReasoning(model, value)));
+
                 modelOptionsMenu.Items.Add(CreateOptionsMenu(
                     $"{MenuText.ContextSizePrefix}: {FormatUtilities.FormatContextSize(model.ContextSize)}",
                     model.ContextSize,
                     model.ContextSizeOptions.Select(size => (size, $"{FormatUtilities.FormatContextSize(size)} tokens")),
                     value => viewModel.SetModelContextSize(model, value)));
+            }
 
             modelOptionsMenu.Items.Add(CreateAction(
                 MenuText.StartModel,
@@ -424,17 +440,29 @@ public sealed class MenuManager(
                 Header = MenuText.NoModels,
                 IsEnabled = false
             });
-            return;
+        }
+        else
+        {
+            foreach (var model in viewModel.Models)
+            {
+                modelsMenu.Items.Add(new NativeMenuItem
+                {
+                    Header = model.GetDisplayName(),
+                    IsEnabled = false
+                });
+            }
         }
 
-        foreach (var model in viewModel.Models)
+        modelsMenu.Items.Add(new NativeMenuItemSeparator());
+        var copyNamesItem = new NativeMenuItem
         {
-            modelsMenu.Items.Add(new NativeMenuItem
-            {
-                Header = model.GetDisplayName(),
-                IsEnabled = false
-            });
-        }
+            Header = MenuText.CopyNames,
+            Icon = GetIcon(MenuIcons.Copy_Icon),
+            IsEnabled = viewModel.Models.Count > 0
+        };
+        copyNamesItem.Click += async (_, _) => await CopyTextToClipboardAsync(
+            string.Join(Environment.NewLine, viewModel.Models.Select(model => model.GetDisplayName())));
+        modelsMenu.Items.Add(copyNamesItem);
     }
 
     private NativeMenuItem CreateOptionsMenu<T>(

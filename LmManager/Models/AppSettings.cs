@@ -19,4 +19,5 @@ public sealed class AppSettings
 
     public Dictionary<string, int> ModelContextSizes { get; set; } = new(StringComparer.Ordinal);
     public Dictionary<string, double> ModelTemperatures { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<string, ReasoningProfile> ModelReasonings { get; set; } = new(StringComparer.Ordinal);
 }

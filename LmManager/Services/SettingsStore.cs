@@ -35,7 +35,8 @@ public sealed class SettingsStore
                 LlamaPort = GetPortOrDefault(settings?.LlamaPort, defaults.LlamaPort),
                 LlamaExecutable = GetValueOrDefault(settings?.LlamaExecutable, defaults.LlamaExecutable),
                 ModelContextSizes = GetContextSizesOrDefault(settings?.ModelContextSizes),
-                ModelTemperatures = GetTemperaturesOrDefault(settings?.ModelTemperatures)
+                ModelTemperatures = GetTemperaturesOrDefault(settings?.ModelTemperatures),
+                ModelReasonings = GetReasoningsOrDefault(settings?.ModelReasonings)
             };
         }
         catch (Exception)
@@ -63,6 +64,15 @@ public sealed class SettingsStore
             : temperatures.Where(
                 entry => !string.IsNullOrWhiteSpace(entry.Key) &&
                 ModelInfo.IsSupportedTemperature(entry.Value))
+                .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal);
+
+    private static Dictionary<string, ReasoningProfile> GetReasoningsOrDefault(
+        Dictionary<string, ReasoningProfile>? reasonings) =>
+        reasonings is null
+            ? new Dictionary<string, ReasoningProfile>(StringComparer.Ordinal)
+            : reasonings
+                .Where(entry => !string.IsNullOrWhiteSpace(entry.Key) &&
+                    ModelInfo.IsSupportedReasoning(entry.Value))
                 .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal);
 
     public void Save(AppSettings settings)

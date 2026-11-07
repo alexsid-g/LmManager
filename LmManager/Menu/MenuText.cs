@@ -22,10 +22,12 @@ public static class MenuText
     public const string ChooseFolder = "Choose folder...";
     public const string ScanNow = "Scan now";
     public const string ModelsFound = "Found Models List";
+    public const string CopyNames = "Copy names";
     public const string LoadModel = "Load model";
     public const string NoModels = "Empty";
     public const string ContextSizePrefix = "Context size";
     public const string TemperaturePrefix = "Temperature";
+    public const string ReasoningPrefix = "Reasoning";
     public const string StartModel = "Load this model";
 
     public const string ModelLabel = "Model";
