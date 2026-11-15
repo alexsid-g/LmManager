@@ -2,13 +2,13 @@ using LmManager.Models;
 
 namespace LmManager.Services;
 
-public class MlxLmProvider : LLMServerProvider
+public sealed class MlxLmProvider : LLMServerProvider
 {
     private static readonly HashSet<string> ParamsBlacklist = new(
         ["--model", "--host", "--port"],
         StringComparer.OrdinalIgnoreCase);
 
-    protected readonly AppSettings Settings;
+    private readonly AppSettings Settings;
 
     public MlxLmProvider(AppSettings settings, Action<string>? logOutput = null)
         : base(logOutput)
@@ -16,17 +16,11 @@ public class MlxLmProvider : LLMServerProvider
         Settings = settings;
     }
 
-    protected virtual string ProviderName => "MLX-LM";
-    protected virtual string Host => Settings.MlxHost;
-    protected virtual int Port => Settings.MlxPort;
-    protected virtual string ServerExecutable => Settings.MlxExecutable;
-    protected virtual string ServerExecutableName => "mlx_lm.server";
-
-    public override string Name => ProviderName;
-    public override string Address => $"http://{Host}:{Port}";
+    public override string Name => "MLX-LM";
+    public override string Address => $"http://{Settings.MlxHost}:{Settings.MlxPort}";
     public override ModelFormat SupportedModelFormat => ModelFormat.Mlx;
-    protected override string Executable => ServerExecutable;
-    protected override string ExecutableName => ServerExecutableName;
+    protected override string Executable => Settings.MlxExecutable;
+    protected override string ExecutableName => "mlx_lm.server";
     protected override string ModelsEndpoint => "/v1/models";
     protected override string? HealthEndpoint => null;
     public override bool Supports(ModelInfo model) => model.Format == ModelFormat.Mlx;
@@ -36,8 +30,8 @@ public class MlxLmProvider : LLMServerProvider
         {
             { "--model", model.Path },
             { "--use-default-chat-template", string.Empty },
-            { "--host", Host },
-            { "--port", Port.ToString(System.Globalization.CultureInfo.InvariantCulture)},
+            { "--host", Settings.MlxHost },
+            { "--port", Settings.MlxPort.ToString(System.Globalization.CultureInfo.InvariantCulture)},
         };
 
         return LoadStartupParametersAndMerge(model, args, ParamsBlacklist);
