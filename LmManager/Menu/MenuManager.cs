@@ -255,17 +255,19 @@ public sealed class MenuManager(
         return item;
     }
 
+    private static string JoinDistinct<T>(
+        IEnumerable<T> source,
+        Func<T, bool> filter,
+        Func<T, string> project) =>
+        string.Join(Environment.NewLine, source.Where(filter).Select(project).Distinct());
+
     private string GetRunningServerAddresses() =>
-        string.Join(Environment.NewLine, viewModel.Servers
-            .Where(server => server.IsRunning)
-            .Select(server => server.Address)
-            .Distinct());
+        JoinDistinct(viewModel.Servers, s => s.IsRunning, s => s.Address);
 
     private string GetRunningModelNames() =>
-        string.Join(Environment.NewLine, viewModel.Servers
-            .Where(server => server.IsRunning && !string.IsNullOrWhiteSpace(server.CurrentModel))
-            .Select(FormatCurrentModel)
-            .Distinct());
+        JoinDistinct(viewModel.Servers,
+            s => s.IsRunning && !string.IsNullOrWhiteSpace(s.CurrentModel),
+            FormatCurrentModel);
 
     private IEnumerable<ModelParameters> GetRunningModelParameters() =>
         viewModel.Servers

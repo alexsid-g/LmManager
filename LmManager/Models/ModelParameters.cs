@@ -1,5 +1,6 @@
-namespace LmManager.Models;
 using LmManager.ViewModels;
+
+namespace LmManager.Models;
 
 public record ModelParameters(
     ServerViewModel Server,
