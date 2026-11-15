@@ -285,32 +285,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var modelPath = Path.GetFullPath(model.Path);
-        var hadPreviousContextSize = _settings.ModelContextSizes.TryGetValue(modelPath, out var previousContextSize);
-        _settings.ModelContextSizes[modelPath] = contextSize;
-        try
-        {
-            _settingsStore.Save(_settings);
-            var index = Models.IndexOf(model);
-            if (index >= 0)
-                Models[index] = model with { ContextSize = contextSize };
-
-            StatusMessage = $"Context size for {model.Name} set to {contextSize:N0}.";
-            HasError = false;
-            _logger.Write(StatusMessage);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            if (hadPreviousContextSize)
-                _settings.ModelContextSizes[modelPath] = previousContextSize;
-            else
-                _settings.ModelContextSizes.Remove(modelPath);
-            StatusMessage = $"Could not save context size: {ex.Message}";
-            HasError = true;
-            _logger.Write(StatusMessage);
-        }
-
-        StateChanged?.Invoke();
+        ApplyModelParameter(
+            _settings.ModelContextSizes,
+            model,
+            contextSize,
+            $"Context size for {model.Name} set to {contextSize:N0}.",
+            "context size",
+            (m, v) => m with { ContextSize = v });
     }
 
     public void SetModelTemperature(ModelInfo model, double temperature)
@@ -323,33 +304,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var modelPath = Path.GetFullPath(model.Path);
-        var hadPreviousTemperature = _settings.ModelTemperatures.TryGetValue(modelPath, out var previousTemperature);
-        _settings.ModelTemperatures[modelPath] = temperature;
-
-        try
-        {
-            _settingsStore.Save(_settings);
-            var index = Models.IndexOf(model);
-            if (index >= 0)
-                Models[index] = model with { Temperature = temperature };
-
-            StatusMessage = $"Temperature for {model.Name} set to {temperature:0.0}.";
-            HasError = false;
-            _logger.Write(StatusMessage);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            if (hadPreviousTemperature)
-                _settings.ModelTemperatures[modelPath] = previousTemperature;
-            else
-                _settings.ModelTemperatures.Remove(modelPath);
-            StatusMessage = $"Could not save temperature: {ex.Message}";
-            HasError = true;
-            _logger.Write(StatusMessage);
-        }
-
-        StateChanged?.Invoke();
+        ApplyModelParameter(
+            _settings.ModelTemperatures,
+            model,
+            temperature,
+            $"Temperature for {model.Name} set to {temperature:0.0}.",
+            "temperature",
+            (m, v) => m with { Temperature = v });
     }
 
     public void SetModelReasoning(ModelInfo model, ReasoningProfile reasoning)
@@ -362,28 +323,45 @@ public partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var modelPath = Path.GetFullPath(model.Path);
-        var hadPreviousReasoning = _settings.ModelReasonings.TryGetValue(modelPath, out var previousReasoning);
-        _settings.ModelReasonings[modelPath] = reasoning;
+        ApplyModelParameter(
+            _settings.ModelReasonings,
+            model,
+            reasoning,
+            $"Reasoning for {model.Name} set to {reasoning}.",
+            "reasoning",
+            (m, v) => m with { Reasoning = v });
+    }
 
+    private void ApplyModelParameter<T>(
+        Dictionary<string, T> storage,
+        ModelInfo model,
+        T value,
+        string successMessage,
+        string kindLabel,
+        Func<ModelInfo, T, ModelInfo> withField)
+        where T : notnull
+    {
+        var modelPath = Path.GetFullPath(model.Path);
+        var hadPrevious = storage.TryGetValue(modelPath, out var previous);
+        storage[modelPath] = value;
         try
         {
             _settingsStore.Save(_settings);
             var index = Models.IndexOf(model);
             if (index >= 0)
-                Models[index] = model with { Reasoning = reasoning };
+                Models[index] = withField(model, value);
 
-            StatusMessage = $"Reasoning for {model.Name} set to {reasoning}.";
+            StatusMessage = successMessage;
             HasError = false;
             _logger.Write(StatusMessage);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            if (hadPreviousReasoning)
-                _settings.ModelReasonings[modelPath] = previousReasoning;
+            if (hadPrevious)
+                storage[modelPath] = previous;
             else
-                _settings.ModelReasonings.Remove(modelPath);
-            StatusMessage = $"Could not save reasoning: {ex.Message}";
+                storage.Remove(modelPath);
+            StatusMessage = $"Could not save {kindLabel}: {ex.Message}";
             HasError = true;
             _logger.Write(StatusMessage);
         }
