@@ -267,7 +267,7 @@ public sealed class MenuManager(
             .Select(FormatCurrentModel)
             .Distinct());
 
-    private IEnumerable<(ServerViewModel Server, int? ContextSize, double? Temperature, ReasoningProfile? Reasoning)> GetRunningModelParameters() =>
+    private IEnumerable<ModelParameters> GetRunningModelParameters() =>
         viewModel.Servers
             .Where(server => server.IsRunning &&
                 (server.StartedModel is not null ||
@@ -278,7 +278,7 @@ public sealed class MenuManager(
                 var model = server.StartedModel ?? FindCurrentModel(server);
                 var contextSize = server.RuntimeParameters?.ContextSize ?? model?.ContextSize;
                 var temperature = server.RuntimeParameters?.Temperature ?? model?.Temperature;
-                return (Server: server, ContextSize: contextSize, Temperature: temperature, Reasoning: model?.Reasoning);
+                return new ModelParameters(server, contextSize, temperature, model?.Reasoning);
             });
 
     private string GetRunningModelParametersForClipboard() =>
@@ -290,7 +290,7 @@ public sealed class MenuManager(
                 $"{MenuText.ReasoningPrefix}: {FormatReasoning(entry.Reasoning)}"));
 
     private string FormatModelParameters(
-        IReadOnlyCollection<(ServerViewModel Server, int? ContextSize, double? Temperature, ReasoningProfile? Reasoning)> modelParameters) =>
+        IReadOnlyCollection<ModelParameters> modelParameters) =>
         modelParameters.Count == 0
             ? MenuText.ValueUnavailable
             : string.Join(", ", modelParameters.Select(entry =>
