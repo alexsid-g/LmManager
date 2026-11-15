@@ -27,7 +27,7 @@ public sealed class LlamaCppProvider : LLMServerProvider
         },
 
         // all available
-        [ReasoningProfile.Unlim] = new()
+        [ReasoningProfile.Unlimited] = new()
         {
             ["--reasoning"] = "on",
         },

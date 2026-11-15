@@ -11,7 +11,7 @@ public enum ReasoningProfile
     None,
     Medium,
     Maximum,
-    Unlim,
+    Unlimited,
 }
 
 public sealed record ModelInfo(
@@ -40,7 +40,7 @@ public sealed record ModelInfo(
             (ReasoningProfile.None, nameof(ReasoningProfile.None)),
             (ReasoningProfile.Medium, nameof(ReasoningProfile.Medium)),
             (ReasoningProfile.Maximum, nameof(ReasoningProfile.Maximum)),
-            (ReasoningProfile.Unlim, nameof(ReasoningProfile.Unlim)),
+            (ReasoningProfile.Unlimited, nameof(ReasoningProfile.Unlimited)),
         ]);
 
     public IReadOnlyList<int> ContextSizeOptions { get; } =  [32768, 65536, 131072];
