@@ -67,14 +67,17 @@ public sealed class LlamaCppProvider : LLMServerProvider
             { "--temp", model.Temperature.ToString(System.Globalization.CultureInfo.InvariantCulture) },
             { "--host", _settings.LlamaHost },
             { "--port", _settings.LlamaPort.ToString(System.Globalization.CultureInfo.InvariantCulture) },
+            { "--top-p", LLMConsts.TopP },
+            { "--top-k", LLMConsts.TopK },
+            { "--min-p", LLMConsts.MinP },
         };
 
         if (model.HasMmproj && model.MmprojFileName is { } mmprojFileName)
         {
             var modelDirectory = Path.GetDirectoryName(model.Path) ?? ".";
             args.Add("--mmproj", Path.Combine(modelDirectory, mmprojFileName));
-            args.Add("--image-min-tokens", "1024");
-            args.Add("--image-max-tokens", "2048");
+            args.Add("--image-min-tokens", LLMConsts.ImageMinTokens);
+            args.Add("--image-max-tokens", LLMConsts.ImageMaxTokens);
         }
 
         if (!ReasoningProfiles.TryGetValue(model.Reasoning, out var reasoning))

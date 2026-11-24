@@ -32,6 +32,16 @@ public sealed class MlxLmProvider : LLMServerProvider
             { "--use-default-chat-template", string.Empty },
             { "--host", Settings.MlxHost },
             { "--port", Settings.MlxPort.ToString(System.Globalization.CultureInfo.InvariantCulture)},
+            { "--top-p", LLMConsts.TopP },
+            { "--top-k", LLMConsts.TopK },
+            { "--min-p", LLMConsts.MinP },
+            // Some test params for M5 Pro architecture
+            { "--max-tokens", "8192" },
+            { "--prefill-step-size", "4096" },
+            { "--prompt-cache-size", "4" },
+            { "--kv-bits", "8" },
+            { "--kv-group-size", "64" },
+            { "--quantized-kv-start", "4096" },
         };
 
         return LoadStartupParametersAndMerge(model, args, ParamsBlacklist);
